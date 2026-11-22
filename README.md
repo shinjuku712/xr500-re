@@ -5,8 +5,8 @@
 <br />
 
 <p>
-  <strong>Single-binary Rust + React local controller for Liectroux XR500 (Xiamen Lilin T2/T3) robot vacuums.</strong><br />
-  100% local HoSLAM live mapping (port 9999), direct Tuya v3.3 LAN control (port 6668), permanent custom places, freehand brush cleaning, RC drive, and Poop Guard — zero cloud, zero Python.
+  <strong>Local Rust + React controller for Liectroux XR500 (Xiamen Lilin T2/T3) robot vacuums.</strong><br />
+  Connects directly over LAN using the onboard HoSLAM map stream (TCP 9999) and Tuya v3.3 local protocol (TCP 6668). No Tuya Cloud account or internet access is required at runtime.
 </p>
 
 <p>
@@ -33,12 +33,13 @@
 
 | Capability | What it does |
 | :--- | :--- |
-| **Single Native Binary** | Written in Rust (`tokio` + `axum` + `rust-embed`). Compiles the entire backend, CLI, LAN scanner, and React SPA into one fast native binary. |
-| **100% Local SLAM Stream** | Streams your vacuum's live occupancy grid (`hoslmap\0`), cleaned area (`hoslcac\0`), and **1 Hz live robot trajectory (`hosltraj`)** directly from onboard **TCP Port `9999`** — zero Tuya Cloud, zero API keys, zero trials. |
-| **Permanent Custom Places** | Define clickable named places that **span across multiple rooms** (e.g., a long *Corridor* shared by 5 rooms, *Under Dining Table*, *Entryway*). Click once to clean just that area. |
-| **6 Ways to Pick & Clean** | Pick native rooms (`1`), permanent `+ Place` (`N`), drag rectangular zones (`2`), freehand **Brush Paint** (`3`), drop **Go-To / Spot Pins** (`4`), or recall saved 1-click **Presets**. |
-| **3-Layer Poop Guard** | 1-click **💩 Poop Pins** (`5`/`P`) that push real `DP 15 (0x1A)` No-Go bubbles to the robot, a **Pre-Flight Floor Check** gate, and an optional **Webcam Floor-Anomaly Auto-Halt**. |
-| **Full Hardware Control** | Suction, Mop Water Flow, **Y-Pattern Mop (`DP 104`)**, Wall-Follow Edge Clean, Speaker Volume (`DP 26`), Do Not Disturb (`DP 25`), live **Consumables Health** (`DP 17/19/21/23`), and a **Manual RC D-Pad (`DP 12`)**. |
+| **Single Native Binary** | Rust (`tokio` + `axum` + `rust-embed`) compiles the backend, CLI, LAN scanner, and embedded React UI into one standalone binary. |
+| **Local SLAM Stream** | Reads the vacuum's live occupancy grid (`hoslmap\0`), cleaned area (`hoslcac\0`), and 1 Hz trajectory (`hosltraj`) directly from onboard TCP port `9999` without Tuya Cloud. |
+| **Quick Map & Room Management** | Silent house-mapping mode (suction and water off) for unmapped robots, plus room auto-segmentation (`DP 101`) and map reset (`DP 13`). |
+| **Permanent Custom Places** | Define clickable named areas that span across multiple rooms (e.g., a corridor, under a dining table, or entryway) and clean them with one click. |
+| **Multiple Cleaning Modes** | Select native rooms (`1`), saved places (`N`), rectangular zones (`2`), freehand brush spots (`3`), go-to/spot pins (`4`), or saved presets. |
+| **Poop Guard** | Drop `DP 15 (0x1A)` No-Go exclusion bubbles (`5`/`P`), optional pre-flight floor confirmation, and optional webcam anomaly auto-halt. |
+| **Hardware Controls** | Suction, mop water flow, Y-pattern mop (`DP 104`), edge clean, speaker volume (`DP 26`), DND (`DP 25`), consumables (`DP 17/19/21/23`), and manual RC drive (`DP 12`). |
 
 ---
 
@@ -65,8 +66,8 @@ Make sure your machine is on the same Wi-Fi network as the vacuum:
 Note your **IP Address** (e.g. `192.168.x.x`) and **Device ID (`gwId`)**.
 
 ### 3. Configure `.env`
-- **Live SLAM Maps & 1 Hz Robot Tracking (`Port 9999`):** Require **zero keys and zero Tuya Cloud** — just your robot's local IP.
-- **Sending Commands (`Port 6668`):** Stock firmware encrypts local TCP commands on port `6668` with a device-specific 16-character AES-128 `LOCAL_KEY`. Extract it once (either offline from flash via internal Micro-USB / 3.3V UART — see [`docs/hardware_notes.md`](docs/hardware_notes.md) — or via a one-time export from your paired Smart Life / Tuya Smart account). Zero cloud calls are ever made at runtime.
+- **Live SLAM Maps & Tracking (`Port 9999`):** Unencrypted TCP — only requires the robot's LAN IP.
+- **Sending Commands (`Port 6668`):** The stock firmware encrypts local TCP commands with a device-specific 16-character AES-128 `LOCAL_KEY`. You only need to obtain this key once (either offline from flash via internal Micro-USB / 3.3V UART — see [`docs/hardware_notes.md`](docs/hardware_notes.md) — or via a one-time export from an existing Smart Life / Tuya Smart pairing). After that, Tuya Cloud is not used.
 
 ```bash
 cp .env.example .env
