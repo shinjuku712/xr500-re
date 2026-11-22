@@ -186,15 +186,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const sortedDpKeys = Object.keys(dps).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
 
   return (
-    <aside className="ios-sheet fixed right-4 top-20 bottom-24 z-30 flex w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[26px]">
-      {/* iOS Segmented Tab Bar — Zero Borders */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
-        <div className="ios-segmented flex flex-1 gap-0.5">
+    <aside className="ios-sheet fixed right-4 top-20 bottom-24 z-30 flex w-[396px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[26px]">
+      {/* iOS Segmented Tab Bar — Zero Borders, Concentric Radii */}
+      <div className="flex items-center justify-between gap-2.5 px-4 pt-4 pb-2.5">
+        <div className="ios-segmented flex flex-1 items-center gap-1">
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => onTabChange(t.id)}
-              className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-[9px] py-2 text-[13px] font-medium transition ${
+              className={`relative flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] px-2.5 py-2 text-[12.5px] font-medium transition ${
                 tab === t.id ? 'bg-[#48484a] text-white shadow-sm' : 'text-[#c7c7cc] hover:text-white'
               }`}
             >
@@ -211,7 +211,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         <button
           onClick={onClose}
           aria-label="Close panel"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2c2c2e] text-[#ebebf5] transition hover:bg-[#3a3a3c]"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2c2c2e] text-[#ebebf5] transition hover:bg-[#3a3a3c]"
         >
           <X className="h-4 w-4" />
         </button>

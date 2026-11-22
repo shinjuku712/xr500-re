@@ -15,19 +15,15 @@
   }
 }
 
-/* iOS Dark Mode Elevated Materials — ZERO borders, pure tonal depth + soft ambient shadows, WCAG AAA contrast */
+/* iOS Dark Mode Elevated Materials — ZERO borders, 100% solid opaque surfaces, pure tonal depth, WCAG AAA contrast */
 .ios-sheet {
-  background: rgba(28, 28, 30, 0.94);
-  backdrop-filter: blur(48px) saturate(180%);
-  -webkit-backdrop-filter: blur(48px) saturate(180%);
-  box-shadow: 0 28px 64px -12px rgba(0, 0, 0, 0.85);
+  background: #1c1c1e;
+  box-shadow: 0 28px 64px -12px rgba(0, 0, 0, 0.9);
 }
 
 .ios-pill {
-  background: rgba(28, 28, 30, 0.88);
-  backdrop-filter: blur(36px) saturate(180%);
-  -webkit-backdrop-filter: blur(36px) saturate(180%);
-  box-shadow: 0 14px 36px -8px rgba(0, 0, 0, 0.78);
+  background: #1c1c1e;
+  box-shadow: 0 14px 36px -8px rgba(0, 0, 0, 0.85);
 }
 
 .ios-group {
@@ -37,8 +33,8 @@
 
 .ios-segmented {
   background: #2c2c2e;
-  border-radius: 12px;
-  padding: 3px;
+  border-radius: 14px;
+  padding: 4px;
 }
 
 .ios-kbd {
