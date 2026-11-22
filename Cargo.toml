@@ -1,0 +1,31 @@
+[package]
+name = "xr500"
+version = "2.0.0"
+edition = "2024"
+description = "100% local Rust + React controller and HoSLAM studio for Liectroux XR500 robot vacuums"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+tower-http = { version = "0.6", features = ["cors"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+dotenvy = "0.15"
+aes = "0.8"
+ecb = "0.1"
+md-5 = "0.10"
+crc32fast = "1.4"
+base64 = "0.22"
+lz4_flex = "0.11"
+rust-embed = "8"
+mime_guess = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

@@ -1,0 +1,30 @@
+# Rust build artifacts
+target/
+
+# Secrets, Tuya credentials & device states
+.env
+devices.json
+snapshot.json
+tinytuya.json
+*.log
+
+# Personal house maps, room configs & live device dumps
+docs/real_lay.bin
+docs/real_rou.bin
+docs/*.bin.tmp
+docs/map_config.json
+docs/initial_status.json
+docs/scan_results.json
+docs/tuya_spec_raw.json
+docs/uart_boot.log
+
+# Large firmware dumps (analyzed locally)
+firmware/*.pack
+firmware/*.bin
+firmware/*.img
+firmware/*_extracted/
+!firmware/.gitkeep
+
+# React web-ui build dependencies
+web-ui/node_modules/
+web-ui/tsconfig.tsbuildinfo

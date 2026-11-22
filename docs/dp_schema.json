@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Liectroux XR500T3 Verified Data Points (DP) Schema",
+  "description": "Verified hardware DP definitions pulled from live Liectroux XR500T3 (model XR500T3-6158, product fwj0eylta6vretyq)",
+  "version": "2.0.0",
+  "active_profile": "T3",
+  "profiles": {
+    "T3": {
+      "name": "Lilin XR500T3 (Verified Live Hardware)",
+      "dp_map": {
+        "switch_go": 1,
+        "pause": 2,
+        "switch_charge": 3,
+        "mode": 4,
+        "status": 5,
+        "clean_time": 6,
+        "clean_area": 7,
+        "battery": 8,
+        "suction": 9,
+        "water_level": 10,
+        "locate": 11,
+        "direction": 12,
+        "reset_map": 13,
+        "raw_map_data": 14,
+        "command_trans": 15,
+        "request": 16,
+        "edge_brush_life": 17,
+        "main_brush_life": 19,
+        "filter_life": 21,
+        "mop_life": 23,
+        "dnd_switch": 25,
+        "volume": 26,
+        "break_clean": 27,
+        "fault": 28,
+        "raw_dnd": 33,
+        "voice_data": 35,
+        "raw_room_clean": 15,
+        "raw_zone_clean": 15,
+        "raw_goto_pos": 15,
+        "smart_rooms": 101,
+        "rooms_msg": 102,
+        "y_mop": 104,
+        "custom_mode_switch": 105
+      }
+    },
+    "T2": {
+      "name": "Lilin T2 Board (Legacy Revision)",
+      "dp_map": {
+        "switch_go": 1,
+        "pause": 2,
+        "mode": 3,
+        "status": 4,
+        "suction": 5,
+        "water_level": 6,
+        "battery": 11,
+        "clean_area": 12,
+        "clean_time": 13,
+        "fault": 14,
+        "locate": 15,
+        "volume": 16,
+        "raw_room_clean": 102,
+        "raw_zone_clean": 103,
+        "raw_goto_pos": 104,
+        "raw_map_data": 105
+      }
+    }
+  },
+  "datapoints": {
+    "1": { "code": "switch_go", "type": "Boolean", "name": "Power / Clean Switch", "access": "rw" },
+    "2": { "code": "pause", "type": "Boolean", "name": "Pause / Resume", "access": "rw" },
+    "3": { "code": "switch_charge", "type": "Boolean", "name": "Return to Dock Switch", "access": "rw" },
+    "4": {
+      "code": "mode",
+      "type": "Enum",
+      "name": "Work Mode",
+      "access": "rw",
+      "values": ["smart", "zone", "pose", "part", "chargego", "wallfollow", "selectroom"]
+    },
+    "5": {
+      "code": "status",
+      "type": "Enum",
+      "name": "Robot Status",
+      "access": "ro",
+      "values": [
+        "standby", "smart", "zone_clean", "part_clean", "cleaning", "paused",
+        "goto_pos", "pos_arrived", "pos_unarrive", "goto_charge", "charging",
+        "charge_done", "sleep", "fault", "wall_follow", "direction_control",
+        "select_room", "repositing"
+      ]
+    },
+    "6": { "code": "clean_time", "type": "Integer", "name": "Cleaning Duration", "unit": "min", "access": "ro" },
+    "7": { "code": "clean_area", "type": "Integer", "name": "Cleaned Area", "unit": "m²", "access": "ro" },
+    "8": { "code": "residual_electricity", "type": "Integer", "name": "Battery Percentage", "unit": "%", "access": "ro" },
+    "9": {
+      "code": "suction",
+      "type": "Enum",
+      "name": "Suction Level",
+      "access": "rw",
+      "values": ["turnoff", "gentle", "normal", "strong"]
+    },
+    "10": {
+      "code": "cistern",
+      "type": "Enum",
+      "name": "Mop Water Level",
+      "access": "rw",
+      "values": ["closed", "low", "middle", "high"]
+    },
+    "11": { "code": "seek", "type": "Boolean", "name": "Locate / Seek Robot", "access": "rw" },
+    "12": {
+      "code": "direction_control",
+      "type": "Enum",
+      "name": "Direction Control",
+      "access": "rw",
+      "values": ["foward", "backward", "turn_left", "turn_right", "stop"]
+    },
+    "13": { "code": "reset_map", "type": "Boolean", "name": "Reset Map", "access": "rw" },
+    "14": { "code": "path_data", "type": "Raw", "name": "Path Data Stream", "access": "rw" },
+    "15": { "code": "command_trans", "type": "Raw", "name": "Tuya Laser Command Channel (0xAA frames)", "access": "rw" },
+    "16": {
+      "code": "request",
+      "type": "Enum",
+      "name": "Map / Path Request",
+      "access": "rw",
+      "values": ["get_map", "get_path", "get_both"]
+    },
+    "17": { "code": "edge_brush", "type": "Integer", "name": "Side Brush Life", "unit": "h", "access": "ro" },
+    "19": { "code": "roll_brush", "type": "Integer", "name": "Main Brush Life", "unit": "h", "access": "ro" },
+    "21": { "code": "filter", "type": "Integer", "name": "HEPA Filter Life", "unit": "h", "access": "ro" },
+    "23": { "code": "duster_cloth", "type": "Integer", "name": "Mop Cloth Life", "unit": "h", "access": "ro" },
+    "25": { "code": "switch_disturb", "type": "Boolean", "name": "Do Not Disturb", "access": "rw" },
+    "26": { "code": "volume_set", "type": "Integer", "name": "Voice Volume", "unit": "%", "access": "rw" },
+    "27": { "code": "break_clean", "type": "Boolean", "name": "Resume Clean After Recharge", "access": "rw" },
+    "28": {
+      "code": "fault",
+      "type": "Bitmap",
+      "name": "Fault Bitmap",
+      "access": "ro",
+      "bits": {
+        "0": "Cliff sensor obscured or off ground",
+        "1": "Bumper stuck",
+        "2": "Left wheel stall",
+        "3": "Right wheel stall",
+        "4": "Side brush tangled",
+        "5": "Main brush tangled",
+        "6": "Dustbin missing",
+        "7": "LiDAR turret blocked",
+        "8": "Low battery",
+        "9": "Robot trapped"
+      }
+    },
+    "33": { "code": "disturb_time_set", "type": "Raw", "name": "DND Schedule", "access": "rw" },
+    "35": { "code": "voice_data", "type": "Raw", "name": "Voice Pack", "access": "rw" },
+    "101": { "code": "smart_rooms_unseen", "type": "Enum", "name": "Smart Rooms Action", "access": "rw" },
+    "102": { "code": "rooms_msg_unseen", "type": "Bitmap", "name": "Rooms Message Flags", "access": "ro" },
+    "104": { "code": "y_mop", "type": "Boolean", "name": "Y-Pattern Mopping", "access": "rw" },
+    "105": { "code": "custom_mode_switch", "type": "Boolean", "name": "Custom Per-Room Mode", "access": "rw" }
+  }
+}
