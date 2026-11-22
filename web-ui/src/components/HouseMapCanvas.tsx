@@ -26,20 +26,20 @@ interface HouseMapCanvasProps {
   showTrajectory: boolean;
 }
 
-// Refined, architectural muted palette (no harsh neon)
-const ARCHITECTURAL_COLORS: Record<string, [number, number, number]> = {
-  '#38bdf8': [116, 175, 214],
-  '#34d399': [110, 184, 158],
-  '#fbbf24': [214, 175, 110],
-  '#a78bfa': [162, 146, 214],
-  '#f472b6': [212, 134, 168],
-  '#2dd4bf': [102, 186, 178],
-  '#fb7185': [214, 128, 142],
-  '#60a5fa': [126, 162, 220],
+// Refined, understated architectural room palette (matching the obsidian hardware studio aesthetic)
+const STUDIO_COLORS: Record<string, [number, number, number]> = {
+  '#38bdf8': [96, 165, 210],
+  '#34d399': [92, 172, 146],
+  '#fbbf24': [198, 162, 102],
+  '#a78bfa': [150, 136, 206],
+  '#f472b6': [196, 126, 158],
+  '#2dd4bf': [88, 174, 168],
+  '#fb7185': [200, 118, 134],
+  '#60a5fa': [114, 152, 212],
 };
 
 function hexToRgb(hex: string): [number, number, number] {
-  if (ARCHITECTURAL_COLORS[hex.toLowerCase()]) return ARCHITECTURAL_COLORS[hex.toLowerCase()];
+  if (STUDIO_COLORS[hex.toLowerCase()]) return STUDIO_COLORS[hex.toLowerCase()];
   const clean = hex.replace('#', '');
   return [
     parseInt(clean.substring(0, 2), 16) || 140,
@@ -76,8 +76,19 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
 
-  const camRef = useRef({ scale: 2.2, offsetX: 0, offsetY: 0, initialized: false, lastIsReal: false });
-  const smoothRobotRef = useRef({ x: 0, y: 0, init: false });
+  // Smooth spring-interpolated camera (target vs current)
+  const camRef = useRef({
+    scale: 2.2,
+    offsetX: 0,
+    offsetY: 0,
+    targetScale: 2.2,
+    targetOffsetX: 0,
+    targetOffsetY: 0,
+    initialized: false,
+    lastIsReal: false,
+  });
+
+  const smoothRobotRef = useRef({ x: 0, y: 0, heading: 0, init: false });
 
   const dragRef = useRef<{
     type: 'none' | 'pan' | 'zone' | 'place' | 'nogo' | 'vwall' | 'brush';
@@ -107,7 +118,8 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
   const hoveredPlaceIdRef = useRef<string | null>(null);
   const [hoveredRoomId, setHoveredRoomId] = useState<number | null>(null);
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
-  const [hoveredRoomName, setHoveredRoomName] = useState<string | null>(null);
+  const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
+  const [scaleBar, setScaleBar] = useState<{ label: string; px: number }>({ label: '1m', px: 60 });
 
   const slamGrid = useMemo(() => {
     const b64 = mapState?.floorplan?.grid_b64;
@@ -122,7 +134,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
     }
   }, [mapState?.floorplan?.grid_b64]);
 
-  // Architectural SLAM Bitmap Renderer with crisp inter-room boundary edge detection!
+  // Architectural SLAM Bitmap Builder with crisp inter-room boundary edge detection
   useEffect(() => {
     const fp = mapState?.floorplan;
     if (!fp?.is_real_slam || !slamGrid || !fp.width || !fp.height) {
@@ -161,44 +173,43 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         if (v === 255) {
           data[o + 3] = 0;
         } else if (v === 249) {
-          // Razor-sharp warm-white architectural wall
-          data[o] = 244;
-          data[o + 1] = 244;
+          // Crisp brushed-aluminum white wall
+          data[o] = 236;
+          data[o + 1] = 240;
           data[o + 2] = 245;
-          data[o + 3] = 250;
+          data[o + 3] = 248;
         } else if (v === 244) {
-          // Subtle matte neutral floor/carpet
-          data[o] = 63;
-          data[o + 1] = 63;
-          data[o + 2] = 70;
-          data[o + 3] = 145;
+          // Matte dark slate floor
+          data[o] = 52;
+          data[o + 1] = 56;
+          data[o + 2] = 66;
+          data[o + 3] = 148;
         } else if (v < 240 && (v & 3) === 0) {
           const rid = v >> 2;
-          const [r, g, b] = roomColors.get(rid) || [148, 163, 184];
+          const [r, g, b] = roomColors.get(rid) || [126, 152, 184];
           const isSel = selSet.has(rid);
           const isHov = hoveredRoomId === rid;
 
-          // Edge detection: highlight crisp room partition borders
           const left = x > 0 ? slamGrid[i - 1] : v;
           const top = y > 0 ? slamGrid[i - w] : v;
           const isBorder = (left !== v && left < 240) || (top !== v && top < 240);
 
           if (isBorder) {
-            data[o] = Math.min(255, r + 45);
-            data[o + 1] = Math.min(255, g + 45);
-            data[o + 2] = Math.min(255, b + 45);
-            data[o + 3] = isSel ? 230 : 140;
+            data[o] = Math.min(255, r + 55);
+            data[o + 1] = Math.min(255, g + 55);
+            data[o + 2] = Math.min(255, b + 55);
+            data[o + 3] = isSel ? 235 : 135;
           } else {
             data[o] = r;
             data[o + 1] = g;
             data[o + 2] = b;
-            data[o + 3] = isSel ? 135 : isHov ? 96 : 54;
+            data[o + 3] = isSel ? 132 : isHov ? 92 : 48;
           }
         } else {
-          data[o] = 82;
-          data[o + 1] = 82;
-          data[o + 2] = 91;
-          data[o + 3] = 110;
+          data[o] = 72;
+          data[o + 1] = 76;
+          data[o + 2] = 88;
+          data[o + 3] = 105;
         }
       }
     }
@@ -242,7 +253,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
     };
   }, []);
 
-  const fitToViewport = useCallback(() => {
+  const fitToViewport = useCallback((instant = false) => {
     const el = containerRef.current;
     const fp = propsRef.current.mapState?.floorplan;
     if (!el || !fp) return;
@@ -250,20 +261,30 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
     const { min_x, max_x, min_y, max_y } = fp.bounds;
     const worldW = Math.max(10, max_x - min_x);
     const worldH = Math.max(10, max_y - min_y);
-    const padX = 140;
-    const padY = 160;
-    const scale = Math.min(Math.max(200, rect.width - padX) / worldW, Math.max(200, rect.height - padY) / worldH);
+    const padX = 130;
+    const padY = 165;
+    const scale = Math.max(
+      0.35,
+      Math.min(8.0, Math.min(Math.max(200, rect.width - padX) / worldW, Math.max(200, rect.height - padY) / worldH))
+    );
     const centerWX = (min_x + max_x) / 2;
     const centerWY = (min_y + max_y) / 2;
     const real = Boolean(fp.is_real_slam);
+    const targetOffsetX = rect.width / 2 - centerWX * scale;
+    const targetOffsetY = real ? rect.height / 2 - centerWY * scale : rect.height / 2 + centerWY * scale;
 
-    camRef.current = {
-      scale: Math.max(0.35, Math.min(8.0, scale)),
-      offsetX: rect.width / 2 - centerWX * scale,
-      offsetY: real ? rect.height / 2 - centerWY * scale : rect.height / 2 + centerWY * scale,
-      initialized: true,
-      lastIsReal: real,
-    };
+    const cam = camRef.current;
+    cam.targetScale = scale;
+    cam.targetOffsetX = targetOffsetX;
+    cam.targetOffsetY = targetOffsetY;
+    cam.initialized = true;
+    cam.lastIsReal = real;
+
+    if (instant) {
+      cam.scale = scale;
+      cam.offsetX = targetOffsetX;
+      cam.offsetY = targetOffsetY;
+    }
   }, []);
 
   useEffect(() => {
@@ -271,12 +292,12 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
       mapState?.floorplan &&
       (!camRef.current.initialized || camRef.current.lastIsReal !== Boolean(mapState.floorplan.is_real_slam))
     ) {
-      fitToViewport();
+      fitToViewport(true);
     }
   }, [mapState?.floorplan, fitToViewport]);
 
   useEffect(() => {
-    if (fitTrigger > 0) fitToViewport();
+    if (fitTrigger > 0) fitToViewport(false);
   }, [fitTrigger, fitToViewport]);
 
   useEffect(() => {
@@ -284,18 +305,19 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
     const rect = containerRef.current.getBoundingClientRect();
     const cx = rect.width / 2;
     const cy = rect.height / 2;
-    const factor = zoomDelta.dir > 0 ? 1.25 : 1 / 1.25;
+    const factor = zoomDelta.dir > 0 ? 1.28 : 1 / 1.28;
     const cam = camRef.current;
-    const newScale = Math.max(0.3, Math.min(10.0, cam.scale * factor));
-    const ratio = newScale / cam.scale;
-    cam.offsetX = cx - (cx - cam.offsetX) * ratio;
-    cam.offsetY = cy - (cy - cam.offsetY) * ratio;
-    cam.scale = newScale;
+    const newScale = Math.max(0.35, Math.min(10.0, cam.targetScale * factor));
+    const ratio = newScale / cam.targetScale;
+    cam.targetOffsetX = cx - (cx - cam.targetOffsetX) * ratio;
+    cam.targetOffsetY = cy - (cy - cam.targetOffsetY) * ratio;
+    cam.targetScale = newScale;
   }, [zoomDelta]);
 
-  // 60fps Canvas Render Loop
+  // 60fps Studio Render Loop
   useEffect(() => {
     let rafId = 0;
+    let lastScaleBarScale = -1;
 
     const render = (now: number) => {
       const canvas = canvasRef.current;
@@ -312,6 +334,14 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
       if (canvas.width !== targetW || canvas.height !== targetH) {
         canvas.width = targetW;
         canvas.height = targetH;
+      }
+
+      // Smooth spring camera interpolation
+      const cam = camRef.current;
+      if (dragRef.current.type !== 'pan') {
+        cam.scale += (cam.targetScale - cam.scale) * 0.2;
+        cam.offsetX += (cam.targetOffsetX - cam.offsetX) * 0.2;
+        cam.offsetY += (cam.targetOffsetY - cam.offsetY) * 0.2;
       }
 
       const ctx = canvas.getContext('2d');
@@ -336,23 +366,40 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         brushRadiusPx: bRad,
       } = propsRef.current;
 
-      // 1. Matte obsidian canvas background (zero muddy blue)
-      ctx.fillStyle = '#09090b';
-      ctx.fillRect(0, 0, W, H);
-
-      const cam = camRef.current;
       const real = Boolean(ms?.floorplan?.is_real_slam);
       const resCm = ms?.floorplan?.resolution_cm || 5;
       const unitM = real ? resCm / 100.0 : 0.01;
+
+      // Update dynamic metric CAD scale bar only when zoom changes noticeably
+      if (Math.abs(cam.scale - lastScaleBarScale) > 0.04) {
+        lastScaleBarScale = cam.scale;
+        const pxPerMeter = cam.scale / unitM;
+        const candidates = [0.5, 1, 2, 5, 10];
+        let best = 1;
+        for (const m of candidates) {
+          if (m * pxPerMeter >= 48 && m * pxPerMeter <= 130) {
+            best = m;
+            break;
+          }
+        }
+        setScaleBar({ label: best < 1 ? `${best * 100}cm` : `${best}m`, px: Math.round(best * pxPerMeter) });
+      }
+
+      // 1. Studio matte obsidian background with ultra-subtle radial ambient vignette
+      const bg = ctx.createRadialGradient(W * 0.5, H * 0.48, 30, W * 0.5, H * 0.5, Math.max(W, H) * 0.78);
+      bg.addColorStop(0, '#0d1016');
+      bg.addColorStop(1, '#07080b');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
 
       const w2s = (wx: number, wy: number) => ({
         x: wx * cam.scale + cam.offsetX,
         y: real ? wy * cam.scale + cam.offsetY : -wy * cam.scale + cam.offsetY,
       });
 
-      // 2. Ultra-subtle dot / hairline CAD grid
+      // 2. Subtle architectural CAD hairline grid (1m intervals)
       if (sGrid) {
-        const step = real ? 20 : 100; // 1.0 meter
+        const step = real ? 20 : 100;
         const pTL = screenToWorld(0, 0);
         const pBR = screenToWorld(W, H);
         const minX = Math.min(pTL.x, pBR.x);
@@ -360,7 +407,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         const minY = Math.min(pTL.y, pBR.y);
         const maxY = Math.max(pTL.y, pBR.y);
 
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.032)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.028)';
         ctx.lineWidth = 1;
         for (let x = Math.floor(minX / step) * step; x <= maxX; x += step) {
           const sx = Math.round(x * cam.scale + cam.offsetX) + 0.5;
@@ -386,18 +433,19 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
 
       const { floorplan, robot, trajectory } = ms;
 
-      // 3. REAL SLAM FLOORPLAN BITMAP
+      // 3. Real SLAM Floorplan Bitmap with crisp architectural drop shadow
       if (real && offscreenRef.current && floorplan.width && floorplan.height) {
         const tl = w2s(0, 0);
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-        ctx.shadowBlur = 24;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+        ctx.shadowBlur = 32;
+        ctx.shadowOffsetY = 8;
         ctx.drawImage(offscreenRef.current, tl.x, tl.y, floorplan.width * cam.scale, floorplan.height * cam.scale);
         ctx.restore();
       }
 
-      // 3b. Permanent Custom Places (e.g. "Corridor" spanning multiple rooms!)
+      // 4. Permanent Custom Places (e.g. "Corridor")
       for (const pl of floorplan.custom_places || []) {
         const a = w2s(pl.x1, pl.y1);
         const b = w2s(pl.x2, pl.y2);
@@ -408,33 +456,37 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         const selIdx = selPlaceIds.indexOf(pl.id);
         const isSel = selIdx !== -1;
         const isHov = hoveredPlaceIdRef.current === pl.id;
-        const [cr, cg, cb] = hexToRgb(pl.color || '#e2e8f0');
+        const [cr, cg, cb] = hexToRgb(pl.color || '#38bdf8');
 
         ctx.save();
-        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${isSel ? 0.34 : isHov ? 0.24 : 0.14})`;
+        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${isSel ? 0.30 : isHov ? 0.22 : 0.12})`;
         ctx.strokeStyle = isSel
-          ? '#ffffff'
-          : `rgba(${cr}, ${cg}, ${cb}, ${isHov ? 0.95 : 0.7})`;
-        ctx.lineWidth = isSel ? 2 : 1.35;
+          ? '#7dd3fc'
+          : `rgba(${cr}, ${cg}, ${cb}, ${isHov ? 0.9 : 0.65})`;
+        ctx.lineWidth = isSel ? 2 : 1.25;
+        if (isSel) {
+          ctx.shadowColor = 'rgba(56, 189, 248, 0.45)';
+          ctx.shadowBlur = 14;
+        }
         ctx.beginPath();
         ctx.roundRect(rx, ry, rw, rh, 6);
         ctx.fill();
         ctx.stroke();
+        ctx.shadowBlur = 0;
 
-        // Frosted pill label centered on the Custom Place
+        // Clean frosted label pill
         const cx = rx + rw / 2;
         const cy = ry + rh / 2;
         ctx.font = '600 11px Inter, sans-serif';
-        const labelText = pl.name;
-        const tw = ctx.measureText(labelText).width;
+        const tw = ctx.measureText(pl.name).width;
         const badgeW = isSel ? 18 : 0;
         const pillW = tw + badgeW + 18;
         const pillH = 22;
         const px = cx - pillW / 2;
         const py = cy - pillH / 2;
 
-        ctx.fillStyle = isSel ? '#ffffff' : 'rgba(9, 9, 11, 0.78)';
-        ctx.strokeStyle = isSel ? '#ffffff' : `rgba(${cr}, ${cg}, ${cb}, 0.65)`;
+        ctx.fillStyle = isSel ? '#fafafa' : 'rgba(9, 11, 16, 0.82)';
+        ctx.strokeStyle = isSel ? '#fafafa' : `rgba(${cr}, ${cg}, ${cb}, 0.55)`;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.roundRect(px, py, pillW, pillH, 999);
@@ -446,7 +498,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
           ctx.beginPath();
           ctx.arc(px + 11, cy, 7, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = '#fafafa';
           ctx.font = '700 9.5px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -457,11 +509,11 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         ctx.font = '600 11px Inter, sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(labelText, px + (isSel ? 22 : 9), cy);
+        ctx.fillText(pl.name, px + (isSel ? 22 : 9), cy);
         ctx.restore();
       }
 
-      // 4. Persisted No-Go Zones
+      // 5. No-Go Zones
       for (const ng of floorplan.no_go_zones || []) {
         const a = w2s(ng.x1, ng.y1);
         const b = w2s(ng.x2, ng.y2);
@@ -472,15 +524,15 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
 
         ctx.save();
         ctx.fillStyle = 'rgba(244, 63, 94, 0.14)';
-        ctx.strokeStyle = 'rgba(244, 63, 94, 0.75)';
+        ctx.strokeStyle = 'rgba(244, 63, 94, 0.78)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([5, 4]);
         ctx.fillRect(rx, ry, rw, rh);
         ctx.strokeRect(rx, ry, rw, rh);
         ctx.setLineDash([]);
-        if (rw > 34) {
+        if (rw > 36) {
           ctx.fillStyle = '#fda4af';
-          ctx.font = '600 10px Inter, sans-serif';
+          ctx.font = '600 9.5px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('NO-GO', rx + rw / 2, ry + rh / 2);
@@ -488,24 +540,22 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         ctx.restore();
       }
 
-      // 5. Persisted Poop / Pet Hazard Bubbles (synced to DP 15 0x1A!)
+      // 6. Poop / Pet Hazard Bubbles
       for (const hz of floorplan.poop_hazards || []) {
         const c = w2s(hz.x, hz.y);
         const rScreen = hz.radius_px * cam.scale;
         const pulse = (Math.sin(now * 0.004) + 1) / 2;
 
         ctx.save();
-        // Exclusion square outline (what DP 15 0x1A enforces)
         ctx.strokeStyle = 'rgba(245, 158, 11, 0.55)';
         ctx.lineWidth = 1.25;
         ctx.setLineDash([4, 4]);
         ctx.strokeRect(c.x - rScreen, c.y - rScreen, rScreen * 2, rScreen * 2);
         ctx.setLineDash([]);
 
-        // Hazard radial warning zone
         const grad = ctx.createRadialGradient(c.x, c.y, 4, c.x, c.y, rScreen);
-        grad.addColorStop(0, 'rgba(245, 158, 11, 0.35)');
-        grad.addColorStop(1, 'rgba(245, 158, 11, 0.04)');
+        grad.addColorStop(0, 'rgba(245, 158, 11, 0.34)');
+        grad.addColorStop(1, 'rgba(245, 158, 11, 0.03)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(c.x, c.y, rScreen + pulse * 3, 0, Math.PI * 2);
@@ -518,7 +568,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         ctx.restore();
       }
 
-      // 6. Persisted Virtual Walls
+      // 7. Virtual Walls
       for (const vw of floorplan.virtual_walls || []) {
         const a = w2s(vw.x1, vw.y1);
         const b = w2s(vw.x2, vw.y2);
@@ -533,13 +583,15 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         ctx.restore();
       }
 
-      // 7. Real Cleaning Trajectory Trail (subtle crisp white-silver spline)
+      // 8. Live Ice-Blue Trajectory Trail (HoSLAM Port 9999)
       if (sTraj && trajectory.length > 1) {
         ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
-        ctx.lineWidth = 1.35;
+        ctx.strokeStyle = 'rgba(125, 211, 252, 0.42)';
+        ctx.lineWidth = 1.5;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
+        ctx.shadowColor = 'rgba(56, 189, 248, 0.35)';
+        ctx.shadowBlur = 6;
         ctx.beginPath();
         trajectory.forEach(([tx, ty], i) => {
           const p = w2s(tx, ty);
@@ -550,7 +602,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         ctx.restore();
       }
 
-      // 8. Draft Cleaning Zones (from Rect or Brush Paint)
+      // 9. Draft Cleaning Zones & Active Tool Previews
       const drawZoneRect = (x1: number, y1: number, x2: number, y2: number, label: string) => {
         const a = w2s(x1, y1);
         const b = w2s(x2, y2);
@@ -560,8 +612,8 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         const rh = Math.abs(b.y - a.y);
 
         ctx.save();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.11)';
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+        ctx.strokeStyle = '#7dd3fc';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([6, 4]);
         ctx.lineDashOffset = -(now * 0.02);
@@ -578,20 +630,22 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         const tw = ctx.measureText(text).width + 14;
         const tx = rx + rw / 2 - tw / 2;
         const ty = ry - 24;
-        ctx.fillStyle = 'rgba(9, 9, 11, 0.85)';
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fillStyle = 'rgba(9, 11, 16, 0.88)';
+        ctx.strokeStyle = 'rgba(125, 211, 252, 0.35)';
         ctx.beginPath();
         ctx.roundRect(tx, ty, tw, 19, 5);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#f4f4f5';
+        ctx.fillStyle = '#e0f2fe';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, tx + tw / 2, ty + 9.5);
         ctx.restore();
       };
 
-      dZones.forEach((z, idx) => drawZoneRect(z.x1, z.y1, z.x2, z.y2, z.source === 'brush' ? `Spot ${idx + 1}` : `Zone ${idx + 1}`));
+      dZones.forEach((z, idx) =>
+        drawZoneRect(z.x1, z.y1, z.x2, z.y2, z.source === 'brush' ? `Spot ${idx + 1}` : `Zone ${idx + 1}`)
+      );
 
       const drag = dragRef.current;
       if (drag.type === 'zone') {
@@ -600,7 +654,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         drawZoneRect(drag.startWX, drag.startWY, drag.curWX, drag.curWY, 'New Place');
       } else if (drag.type === 'brush' && drag.brushPts.length > 0) {
         ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.strokeStyle = 'rgba(125, 211, 252, 0.35)';
         ctx.lineWidth = bRad * 2 * cam.scale;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -637,7 +691,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         ctx.restore();
       }
 
-      // 9. Clean Minimalist Room Pills
+      // 10. Clean Architectural Room Labels
       for (const room of floorplan.rooms) {
         const lp = w2s(room.label_pos[0], room.label_pos[1]);
         const selIndex = selIds.indexOf(room.id);
@@ -652,8 +706,8 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         const px = lp.x - pillW / 2;
         const py = lp.y - pillH / 2;
 
-        ctx.fillStyle = isSelected ? 'rgba(255, 255, 255, 0.94)' : 'rgba(9, 9, 11, 0.62)';
-        ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.14)';
+        ctx.fillStyle = isSelected ? 'rgba(250, 250, 250, 0.96)' : 'rgba(10, 12, 18, 0.68)';
+        ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.13)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.roundRect(px, py, pillW, pillH, 999);
@@ -665,7 +719,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
           ctx.beginPath();
           ctx.arc(px + 12, lp.y, 7.5, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = '#fafafa';
           ctx.font = '700 10px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -678,41 +732,41 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         ctx.textBaseline = 'middle';
         ctx.fillText(room.name, px + (isSelected ? 24 : 10), lp.y);
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.44)';
         ctx.font = '500 9.5px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
         ctx.fillText(`${room.area_m2}m²`, lp.x, lp.y + 19);
         ctx.restore();
       }
 
-      // 10. Target Pin
+      // 11. Target Pin
       const activePin = dPin || robot.target_pin;
       if (activePin) {
         const pp = w2s(activePin.x, activePin.y);
         const pulse = (Math.sin(now * 0.005) + 1) / 2;
         ctx.save();
-        ctx.strokeStyle = activePin.spot_clean ? '#fbbf24' : '#ffffff';
+        ctx.strokeStyle = activePin.spot_clean ? '#fbbf24' : '#7dd3fc';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(pp.x, pp.y, 9 + pulse * 12, 0, Math.PI * 2);
         ctx.globalAlpha = 0.65 - pulse * 0.5;
         ctx.stroke();
         ctx.globalAlpha = 1;
-        ctx.fillStyle = activePin.spot_clean ? '#fbbf24' : '#ffffff';
+        ctx.fillStyle = activePin.spot_clean ? '#fbbf24' : '#7dd3fc';
         ctx.beginPath();
         ctx.arc(pp.x, pp.y, 5, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      // 11. Minimal Charging Dock Marker
+      // 12. Charging Dock
       const dp = w2s(floorplan.dock.x, floorplan.dock.y);
       ctx.save();
-      ctx.fillStyle = 'rgba(16, 185, 129, 0.16)';
+      ctx.fillStyle = 'rgba(52, 211, 153, 0.14)';
       ctx.beginPath();
-      ctx.arc(dp.x, dp.y, 13, 0, Math.PI * 2);
+      ctx.arc(dp.x, dp.y, 14, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#09090b';
+      ctx.fillStyle = '#090b10';
       ctx.strokeStyle = '#34d399';
       ctx.lineWidth = 1.75;
       ctx.beginPath();
@@ -726,35 +780,82 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
       ctx.fillText('⚡', dp.x, dp.y + 0.5);
       ctx.restore();
 
-      // 12. Live Robot Vacuum Indicator
+      // 13. Studio-Grade Matte-Black LiDAR Robot Vacuum + Volumetric Laser Sweep
       const sr = smoothRobotRef.current;
       if (!sr.init) {
         sr.x = robot.x;
         sr.y = robot.y;
+        sr.heading = robot.heading || 0;
         sr.init = true;
       } else {
-        sr.x += (robot.x - sr.x) * 0.2;
-        sr.y += (robot.y - sr.y) * 0.2;
+        sr.x += (robot.x - sr.x) * 0.18;
+        sr.y += (robot.y - sr.y) * 0.18;
+        let dh = (robot.heading || 0) - sr.heading;
+        while (dh > 180) dh -= 360;
+        while (dh < -180) dh += 360;
+        sr.heading += dh * 0.18;
       }
+
       const rp = w2s(sr.x, sr.y);
+      const rRad = 12.5;
+      const headRad = (sr.heading * Math.PI) / 180;
+
       ctx.save();
       ctx.translate(rp.x, rp.y);
-      ctx.fillStyle = '#18181b';
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-      ctx.shadowBlur = 10;
+
+      // Subtle volumetric ice-blue LiDAR laser fan (matches the README hero banner!)
+      const sweepAngle = robot.is_moving ? (now * 0.0038) % (Math.PI * 2) : headRad - 0.35;
+      const fanRadius = robot.is_moving ? rRad * 5.2 : rRad * 3.0;
+      const fanGrad = ctx.createRadialGradient(0, 0, rRad * 0.4, 0, 0, fanRadius);
+      fanGrad.addColorStop(0, robot.is_moving ? 'rgba(125, 211, 252, 0.38)' : 'rgba(125, 211, 252, 0.14)');
+      fanGrad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+      ctx.fillStyle = fanGrad;
       ctx.beginPath();
-      ctx.arc(0, 0, 10.5, 0, Math.PI * 2);
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, fanRadius, sweepAngle, sweepAngle + 0.72);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.rotate(headRad);
+
+      // Matte obsidian chassis with brushed aluminum bevel
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+      ctx.shadowBlur = 14;
+      const bodyGrad = ctx.createLinearGradient(-rRad, -rRad, rRad, rRad);
+      bodyGrad.addColorStop(0, '#27272a');
+      bodyGrad.addColorStop(1, '#09090b');
+      ctx.fillStyle = bodyGrad;
+      ctx.strokeStyle = robot.is_moving ? '#7dd3fc' : 'rgba(244, 244, 245, 0.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, rRad, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.shadowBlur = 0;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(0, 0, 2.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
 
+      // Front bumper directional arc
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, rRad - 2.5, -0.65, 0.65);
+      ctx.stroke();
+
+      // Offset raised LiDAR turret dome
+      ctx.fillStyle = '#18181b';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(-2.5, 0, 4.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Center LiDAR emitter dot
+      ctx.fillStyle = robot.is_moving ? '#38bdf8' : '#34d399';
+      ctx.beginPath();
+      ctx.arc(-2.5, 0, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
       ctx.restore();
       rafId = requestAnimationFrame(render);
     };
@@ -796,12 +897,12 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
     e.preventDefault();
     const { sx, sy } = getLocalCoords(e);
     const cam = camRef.current;
-    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    const newScale = Math.max(0.3, Math.min(10.0, cam.scale * factor));
-    const ratio = newScale / cam.scale;
-    cam.offsetX = sx - (sx - cam.offsetX) * ratio;
-    cam.offsetY = sy - (sy - cam.offsetY) * ratio;
-    cam.scale = newScale;
+    const factor = e.deltaY < 0 ? 1.14 : 1 / 1.14;
+    const newScale = Math.max(0.35, Math.min(10.0, cam.targetScale * factor));
+    const ratio = newScale / cam.targetScale;
+    cam.targetOffsetX = sx - (sx - cam.targetOffsetX) * ratio;
+    cam.targetOffsetY = sy - (sy - cam.targetOffsetY) * ratio;
+    cam.targetScale = newScale;
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -888,8 +989,12 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
 
     const drag = dragRef.current;
     if (drag.type === 'pan') {
-      camRef.current.offsetX = drag.startCamX + (sx - drag.startScreenX);
-      camRef.current.offsetY = drag.startCamY + (sy - drag.startScreenY);
+      const nx = drag.startCamX + (sx - drag.startScreenX);
+      const ny = drag.startCamY + (sy - drag.startScreenY);
+      camRef.current.offsetX = nx;
+      camRef.current.offsetY = ny;
+      camRef.current.targetOffsetX = nx;
+      camRef.current.targetOffsetY = ny;
       return;
     }
     if (drag.type === 'brush') {
@@ -909,7 +1014,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         hoveredRoomIdRef.current = null;
         setHoveredRoomId(null);
       }
-      setHoveredRoomName(`${hitPlace.name} (Custom Place)`);
+      setHoveredLabel(`${hitPlace.name} · Custom Place`);
       return;
     }
     hoveredPlaceIdRef.current = null;
@@ -919,7 +1024,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
     if (hoveredRoomIdRef.current !== nextId) {
       hoveredRoomIdRef.current = nextId;
       setHoveredRoomId(nextId);
-      setHoveredRoomName(hit ? hit.name : null);
+      setHoveredLabel(hit ? `${hit.name} · ${hit.area_m2}m²` : null);
     }
   };
 
@@ -985,7 +1090,7 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
     toolMode === 'pan'
       ? 'cursor-grab active:cursor-grabbing'
       : toolMode === 'rooms'
-      ? hoveredRoomName
+      ? hoveredLabel
         ? 'cursor-pointer'
         : 'cursor-default'
       : 'cursor-crosshair';
@@ -1003,17 +1108,41 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         onDoubleClick={handleDoubleClick}
       />
 
-      {/* Minimal Translucent Coordinate Chip (Bottom-Left) */}
-      <div className="pointer-events-none absolute bottom-5 left-5 flex items-center gap-2">
-        {cursorWorld && (
-          <div className="rounded-full border border-white/[0.08] bg-zinc-900/45 px-3 py-1 font-mono text-[11px] text-zinc-400 backdrop-blur-2xl">
-            {(cursorWorld.x * unitM).toFixed(2)}m, {(cursorWorld.y * unitM).toFixed(2)}m
-            {isReal && <span className="ml-2 text-emerald-400">● SLAM</span>}
+      {/* Bottom-Left Architectural Scale Bar & Live Coordinates */}
+      <div className="pointer-events-none fixed bottom-5 left-5 z-20 hidden items-center gap-2.5 sm:flex">
+        <div className="glass-pill flex items-center gap-2.5 rounded-full px-3 py-1.5">
+          {/* Dynamic CAD Scale Ruler */}
+          <div className="flex items-center gap-1.5">
+            <div
+              className="h-1.5 border-b border-l border-r border-zinc-400/70"
+              style={{ width: `${scaleBar.px}px` }}
+            />
+            <span className="font-mono text-[10px] text-zinc-400">{scaleBar.label}</span>
           </div>
-        )}
-        {hoveredRoomName && toolMode === 'rooms' && (
-          <div className="rounded-full border border-white/[0.1] bg-zinc-900/55 px-3 py-1 text-[11px] text-zinc-200 backdrop-blur-2xl">
-            {hoveredRoomName} <span className="text-zinc-500">· double-click to rename</span>
+
+          {cursorWorld && (
+            <>
+              <span className="h-3 w-px bg-white/[0.1]" />
+              <span className="font-mono text-[10.5px] text-zinc-400">
+                {(cursorWorld.x * unitM).toFixed(2)}m, {(cursorWorld.y * unitM).toFixed(2)}m
+              </span>
+            </>
+          )}
+
+          {isReal && (
+            <>
+              <span className="h-3 w-px bg-white/[0.1]" />
+              <span className="flex items-center gap-1 font-mono text-[10px] text-sky-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+                HoSLAM 1Hz
+              </span>
+            </>
+          )}
+        </div>
+
+        {hoveredLabel && toolMode === 'rooms' && (
+          <div className="glass-pill rounded-full px-3 py-1.5 text-[11px] text-zinc-200">
+            {hoveredLabel} <span className="text-zinc-500">· double-click to edit</span>
           </div>
         )}
       </div>
