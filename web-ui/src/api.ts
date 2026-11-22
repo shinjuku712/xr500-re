@@ -157,4 +157,7 @@ export const api = {
 
   resetTrajectory: () => req<{ status: string }>('/api/map/reset-trajectory', { method: 'POST' }),
   syncMap: () => req<{ status: string; synced: boolean; is_real_slam: boolean }>('/api/map/sync', { method: 'POST' }),
+  quickMap: () => req<{ status: string; success: boolean }>('/api/map/quick-map', { method: 'POST' }),
+  segmentRooms: () => req<{ status: string; success: boolean }>('/api/map/segment', { method: 'POST' }),
+  resetMap: () => req<{ status: string; success: boolean }>('/api/map/reset', { method: 'POST' }),
 };

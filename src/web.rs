@@ -131,6 +131,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/dp/{dp_id}", post(post_dp))
         .route("/api/map", get(get_map))
         .route("/api/map/sync", post(post_map_sync))
+        .route("/api/map/quick-map", post(post_quick_map))
+        .route("/api/map/segment", post(post_segment_rooms))
+        .route("/api/map/reset", post(post_reset_map))
         .route("/api/clean-rooms", post(post_clean_rooms))
         .route("/api/clean-zones", post(post_clean_zones))
         .route("/api/goto", post(post_goto))
@@ -295,6 +298,27 @@ async fn get_map(State(s): State<AppState>) -> Json<Value> {
 async fn post_map_sync(State(s): State<AppState>) -> Json<Value> {
     let _ = s.tuya.set_dp(16, json!("get_both")).await;
     Json(json!({"status": "ok", "synced": true, "is_real_slam": true}))
+}
+
+async fn post_quick_map(State(s): State<AppState>) -> Json<Value> {
+    let mut m = Map::new();
+    m.insert("9".into(), json!("turnoff"));
+    m.insert("10".into(), json!("closed"));
+    m.insert("4".into(), json!("smart"));
+    m.insert("1".into(), json!(true));
+    let ok = s.tuya.set_dps(m).await.is_ok();
+    Json(json!({"status": "ok", "mode": "quick_map", "success": ok}))
+}
+
+async fn post_segment_rooms(State(s): State<AppState>) -> Json<Value> {
+    let ok1 = s.tuya.set_dp(101, json!("segment")).await.is_ok();
+    let ok2 = s.tuya.set_dp(101, json!("save_rooms")).await.is_ok();
+    Json(json!({"status": "ok", "success": ok1 || ok2}))
+}
+
+async fn post_reset_map(State(s): State<AppState>) -> Json<Value> {
+    let ok = s.tuya.set_dp(13, json!(true)).await.is_ok();
+    Json(json!({"status": "ok", "success": ok}))
 }
 
 async fn post_clean_rooms(State(s): State<AppState>, Json(req): Json<RoomsReq>) -> impl IntoResponse {

@@ -385,10 +385,10 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         setScaleBar({ label: best < 1 ? `${best * 100}cm` : `${best}m`, px: Math.round(best * pxPerMeter) });
       }
 
-      // 1. Studio matte obsidian background with ultra-subtle radial ambient vignette
+      // 1. True iOS OLED matte-black canvas with ultra-subtle radial lift
       const bg = ctx.createRadialGradient(W * 0.5, H * 0.48, 30, W * 0.5, H * 0.5, Math.max(W, H) * 0.78);
-      bg.addColorStop(0, '#0d1016');
-      bg.addColorStop(1, '#07080b');
+      bg.addColorStop(0, '#0c0c0e');
+      bg.addColorStop(1, '#000000');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, W, H);
 
@@ -1108,41 +1108,35 @@ export const HouseMapCanvas: React.FC<HouseMapCanvasProps> = ({
         onDoubleClick={handleDoubleClick}
       />
 
-      {/* Bottom-Left Architectural Scale Bar & Live Coordinates */}
+      {/* Bottom-Left Metric Scale Bar & Live Coordinates (Borderless iOS Pill, WCAG AAA) */}
       <div className="pointer-events-none fixed bottom-5 left-5 z-20 hidden items-center gap-2.5 sm:flex">
-        <div className="glass-pill flex items-center gap-2.5 rounded-full px-3 py-1.5">
-          {/* Dynamic CAD Scale Ruler */}
-          <div className="flex items-center gap-1.5">
+        <div className="ios-pill flex items-center gap-3 rounded-full px-3.5 py-2">
+          {/* Dynamic Metric Scale Ruler */}
+          <div className="flex items-center gap-2">
             <div
-              className="h-1.5 border-b border-l border-r border-zinc-400/70"
+              className="h-1.5 border-b border-l border-r border-[#c7c7cc]"
               style={{ width: `${scaleBar.px}px` }}
             />
-            <span className="font-mono text-[10px] text-zinc-400">{scaleBar.label}</span>
+            <span className="font-mono text-[11px] font-medium text-[#e5e5ea]">{scaleBar.label}</span>
           </div>
 
           {cursorWorld && (
-            <>
-              <span className="h-3 w-px bg-white/[0.1]" />
-              <span className="font-mono text-[10.5px] text-zinc-400">
-                {(cursorWorld.x * unitM).toFixed(2)}m, {(cursorWorld.y * unitM).toFixed(2)}m
-              </span>
-            </>
+            <span className="font-mono text-[11px] text-[#c7c7cc]">
+              {(cursorWorld.x * unitM).toFixed(2)}m, {(cursorWorld.y * unitM).toFixed(2)}m
+            </span>
           )}
 
           {isReal && (
-            <>
-              <span className="h-3 w-px bg-white/[0.1]" />
-              <span className="flex items-center gap-1 font-mono text-[10px] text-sky-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
-                HoSLAM 1Hz
-              </span>
-            </>
+            <span className="flex items-center gap-1.5 font-mono text-[11px] font-medium text-[#64d2ff]">
+              <span className="h-2 w-2 rounded-full bg-[#30d158]" />
+              HoSLAM 1Hz
+            </span>
           )}
         </div>
 
         {hoveredLabel && toolMode === 'rooms' && (
-          <div className="glass-pill rounded-full px-3 py-1.5 text-[11px] text-zinc-200">
-            {hoveredLabel} <span className="text-zinc-500">· double-click to edit</span>
+          <div className="ios-pill rounded-full px-3.5 py-2 text-[12px] font-medium text-white">
+            {hoveredLabel} <span className="text-[#c7c7cc]">· double-click to edit</span>
           </div>
         )}
       </div>
