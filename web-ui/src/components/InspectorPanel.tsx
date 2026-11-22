@@ -32,6 +32,7 @@ import type {
   SavedPreset,
 } from '../types';
 import { PoopGuardPanel } from './PoopGuardPanel';
+import { Ios26Slider, Ios26Toggle } from './IosControls';
 
 export type InspectorTab = 'clean' | 'care' | 'poop' | 'lab';
 
@@ -186,16 +187,16 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const sortedDpKeys = Object.keys(dps).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
 
   return (
-    <aside className="ios-sheet fixed right-4 top-20 bottom-24 z-30 flex w-[396px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[26px]">
-      {/* iOS Segmented Tab Bar — Zero Borders, Concentric Radii */}
+    <aside className="ios-sheet fixed right-4 top-20 bottom-24 z-30 flex w-[396px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px]">
+      {/* iOS 26 Full-Capsule Segmented Tab Bar */}
       <div className="flex items-center justify-between gap-2.5 px-4 pt-4 pb-2.5">
         <div className="ios-segmented flex flex-1 items-center gap-1">
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => onTabChange(t.id)}
-              className={`relative flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] px-2.5 py-2 text-[12.5px] font-medium transition ${
-                tab === t.id ? 'bg-[#48484a] text-white shadow-sm' : 'text-[#c7c7cc] hover:text-white'
+              className={`relative flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-2 text-[12.5px] font-semibold transition ${
+                tab === t.id ? 'ios-segmented-active' : 'text-[#c7c7cc] hover:text-white'
               }`}
             >
               {t.icon}
@@ -242,11 +243,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     value={presetName}
                     onChange={(e) => setPresetName(e.target.value)}
                     placeholder="Save selection (e.g. Under Table)"
-                    className="flex-1 rounded-xl bg-[#2c2c2e] px-3.5 py-2.5 text-[13px] text-white placeholder:text-[#aeaeb2] focus:outline-none focus:ring-2 focus:ring-[#0a84ff]"
+                    className="ios26-input flex-1 px-4 py-2.5 text-[13px]"
                   />
                   <button
                     type="submit"
-                    className="rounded-xl bg-[#0a84ff] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#409cff]"
+                    className="rounded-full bg-[#0a84ff] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#409cff]"
                   >
                     Save
                   </button>
@@ -295,9 +296,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     <button
                       key={s.id}
                       onClick={() => onSuction(s.id)}
-                      className={`rounded-[9px] py-2 text-[13px] font-semibold transition ${
+                      className={`rounded-full py-2 text-[13px] font-semibold transition ${
                         status?.suction === s.id
-                          ? 'bg-[#48484a] text-white shadow-sm'
+                          ? 'ios-segmented-active'
                           : 'text-[#c7c7cc] hover:text-white'
                       }`}
                     >
@@ -316,9 +317,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     <button
                       key={w.id}
                       onClick={() => onWater(w.id)}
-                      className={`rounded-[9px] py-2 text-[13px] font-semibold transition ${
+                      className={`rounded-full py-2 text-[13px] font-semibold transition ${
                         status?.water_level === w.id
-                          ? 'bg-[#48484a] text-white shadow-sm'
+                          ? 'ios-segmented-active'
                           : 'text-[#c7c7cc] hover:text-white'
                       }`}
                     >
@@ -330,13 +331,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
               <button
                 onClick={onWallFollow}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#2c2c2e] py-3 text-[14px] font-medium text-white transition hover:bg-[#3a3a3c]"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-[#2c2c2e] py-3 text-[14px] font-medium text-white transition hover:bg-[#3a3a3c]"
               >
                 <Compass className="h-4 w-4 text-[#64d2ff]" /> Edge / Baseboard Clean
               </button>
             </section>
 
-            {/* iOS Grouped Settings Toggles */}
+            {/* iOS 26 Grouped Settings Toggles */}
             <section className="space-y-2">
               <h3 className="px-1 text-[12px] font-semibold uppercase tracking-wide text-[#c7c7cc]">
                 Settings
@@ -350,40 +351,30 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 ].map((item) => (
                   <div key={item.key} className="flex items-center justify-between px-4 py-3">
                     <span className="text-[14px] font-medium text-white">{item.label}</span>
-                    <button
-                      role="switch"
-                      aria-checked={item.val}
-                      onClick={() => onToggle(item.key, !item.val)}
-                      className={`relative h-[28px] w-[48px] rounded-full transition-colors ${
-                        item.val ? 'bg-[#30d158]' : 'bg-[#48484a]'
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-[2px] h-[24px] w-[24px] rounded-full bg-white shadow transition-all ${
-                          item.val ? 'left-[22px]' : 'left-[2px]'
-                        }`}
-                      />
-                    </button>
+                    <Ios26Toggle
+                      checked={item.val}
+                      onChange={(next) => onToggle(item.key, next)}
+                      ariaLabel={item.label}
+                    />
                   </div>
                 ))}
 
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <Volume2 className="h-4 w-4 text-[#c7c7cc]" />
-                  <input
-                    type="range"
+                <div className="flex items-center gap-3.5 px-4 py-3.5">
+                  <Volume2 className="h-4 w-4 shrink-0 text-[#c7c7cc]" />
+                  <Ios26Slider
                     min={0}
                     max={100}
                     value={volDisplay}
-                    onChange={(e) => setLocalVol(Number(e.target.value))}
-                    onMouseUp={() => {
-                      if (localVol !== null) {
-                        onVolume(localVol);
-                        setLocalVol(null);
-                      }
+                    onChange={setLocalVol}
+                    onCommit={(val) => {
+                      onVolume(val);
+                      setLocalVol(null);
                     }}
-                    className="flex-1 accent-[#0a84ff]"
+                    accent="#0a84ff"
+                    className="flex-1"
+                    ariaLabel="Robot Voice Volume"
                   />
-                  <span className="w-10 text-right font-mono text-[13px] font-medium text-white">
+                  <span className="w-10 shrink-0 text-right font-mono text-[13px] font-semibold text-white">
                     {volDisplay}%
                   </span>
                 </div>
@@ -595,16 +586,19 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <input
                 value={dpId}
                 onChange={(e) => setDpId(e.target.value)}
-                className="w-16 rounded-xl bg-[#2c2c2e] px-3 py-2.5 font-mono text-[13px] text-white focus:outline-none focus:ring-2 focus:ring-[#0a84ff]"
+                aria-label="DP ID"
+                className="ios26-input w-16 px-3 py-2.5 font-mono text-[13px]"
               />
               <input
                 value={dpVal}
                 onChange={(e) => setDpVal(e.target.value)}
-                className="flex-1 rounded-xl bg-[#2c2c2e] px-3 py-2.5 font-mono text-[13px] text-white focus:outline-none focus:ring-2 focus:ring-[#0a84ff]"
+                aria-label="DP Value"
+                className="ios26-input flex-1 px-3.5 py-2.5 font-mono text-[13px]"
               />
               <button
                 type="submit"
-                className="flex items-center justify-center rounded-xl bg-[#0a84ff] px-3.5 text-white hover:bg-[#409cff]"
+                aria-label="Send DP"
+                className="flex items-center justify-center rounded-full bg-[#0a84ff] px-4 text-white transition hover:bg-[#409cff]"
               >
                 <Send className="h-4 w-4" />
               </button>
