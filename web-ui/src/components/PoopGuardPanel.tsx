@@ -25,7 +25,7 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
 }) => {
   const [camActive, setCamActive] = useState(false);
   const [visionArmed, setVisionArmed] = useState(false);
-  const [sensitivity, setSensitivity] = useState(28); // pixel delta threshold
+  const [sensitivity, setSensitivity] = useState(28);
   const [anomalyPct, setAnomalyPct] = useState(0);
   const [alertTriggered, setAlertTriggered] = useState(false);
   const [hasBaseline, setHasBaseline] = useState(false);
@@ -90,31 +90,24 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
     }
   };
 
-  // Real-time floor dark-anomaly detection loop (1 Hz)
   useEffect(() => {
     if (!camActive || !visionArmed || !hasBaseline) return;
     const timer = setInterval(() => {
       const cur = grabFrame();
       const base = baselineRef.current;
       if (!cur || !base) return;
-
       let darkDiffPixels = 0;
       const total = 160 * 90;
       for (let i = 0; i < cur.length; i += 4) {
         const lCur = 0.299 * cur[i] + 0.587 * cur[i + 1] + 0.114 * cur[i + 2];
         const lBase = 0.299 * base[i] + 0.587 * base[i + 1] + 0.114 * base[i + 2];
-        // Specifically detect NEW dark blobs on the floor (darker than clean floor baseline)
-        if (lBase - lCur > sensitivity && lCur < 120) {
-          darkDiffPixels++;
-        }
+        if (lBase - lCur > sensitivity && lCur < 120) darkDiffPixels++;
       }
       const pct = Number(((darkDiffPixels / total) * 100).toFixed(2));
       setAnomalyPct(pct);
-
-      // Localized dark blob between 0.35% and 18% of floor view => likely pet hazard / object
       if (pct >= 0.35 && pct <= 18.0 && !alertTriggered) {
         setAlertTriggered(true);
-        onEmergencyHalt(`Floor anomaly detected (${pct}% dark blob) — paused & docking!`);
+        onEmergencyHalt(`Floor anomaly detected (${pct}%) — paused & docking!`);
       }
     }, 1000);
     return () => clearInterval(timer);
@@ -122,90 +115,84 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Honest Hardware Note */}
-      <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-[11px] leading-relaxed text-amber-200/90">
-        <div className="mb-1 flex items-center gap-1.5 font-semibold text-amber-300">
-          <ShieldAlert className="h-3.5 w-3.5" />
-          Pet Hazard Shield (XR500T3)
+      <div className="rounded-2xl bg-[#ff9f0a]/15 p-3.5 text-[13px] leading-relaxed text-[#ffd60a]">
+        <div className="mb-1 flex items-center gap-1.5 font-semibold text-white">
+          <ShieldAlert className="h-4 w-4 text-[#ff9f0a]" />
+          Pet Hazard Shield
         </div>
-        Your XR500 uses 2D LiDAR (no front RGB camera), so this guards your floors 3 ways: instant{' '}
-        <span className="font-medium text-white">DP 15 No-Go Poop Pins</span>, a{' '}
-        <span className="font-medium text-white">Pre-Flight Check</span>, and optional{' '}
-        <span className="font-medium text-white">Room Camera Vision Auto-Halt</span>.
+        <span className="text-[#ebebf5]">
+          XR500 uses 2D LiDAR (no front camera). Guard floors with instant No-Go Poop Pins, Pre-Flight Check, or Room Camera Vision.
+        </span>
       </div>
 
-      {/* Pre-Flight Floor Check Switch */}
-      <div className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.02] px-3 py-2.5">
+      <div className="ios-group flex items-center justify-between px-4 py-3.5">
         <div>
-          <div className="text-xs font-medium text-zinc-100">Pre-Flight Poop Check</div>
-          <div className="text-[11px] text-zinc-400">Confirm floor is clear before any clean starts</div>
+          <div className="text-[14px] font-medium text-white">Pre-Flight Floor Check</div>
+          <div className="text-[12px] text-[#c7c7cc]">Confirm floor is clear before starting</div>
         </div>
         <button
+          role="switch"
+          aria-checked={preFlightGate}
           onClick={() => onTogglePreFlight(!preFlightGate)}
-          className={`relative h-5 w-9 rounded-full transition ${
-            preFlightGate ? 'bg-amber-500' : 'bg-zinc-700'
+          className={`relative h-[28px] w-[48px] rounded-full transition-colors ${
+            preFlightGate ? 'bg-[#30d158]' : 'bg-[#48484a]'
           }`}
         >
           <span
-            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
-              preFlightGate ? 'left-4.5' : 'left-0.5'
+            className={`absolute top-[2px] h-[24px] w-[24px] rounded-full bg-white shadow transition-all ${
+              preFlightGate ? 'left-[22px]' : 'left-[2px]'
             }`}
           />
         </button>
       </div>
 
-      {/* Active Poop Pins */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-            Active Poop No-Go Pins ({hazards.length})
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[12px] font-semibold uppercase tracking-wide text-[#c7c7cc]">
+            Active Poop Pins ({hazards.length})
           </span>
           <button
             onClick={onSelectPoopTool}
-            className="rounded-lg border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-[11px] font-medium text-amber-200 transition hover:bg-amber-500/25"
+            className="rounded-full bg-[#ff9f0a] px-3 py-1 text-[12px] font-semibold text-black transition hover:bg-[#ffb340]"
           >
-            + Drop Poop Pin
+            + Drop Pin
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-          <span className="text-[11px] text-zinc-400">Buffer Radius</span>
+        <div className="ios-group flex items-center justify-between gap-3 px-4 py-3">
+          <span className="text-[13px] text-[#c7c7cc]">Buffer Radius</span>
           <input
             type="range"
             min={6}
             max={20}
             value={poopRadiusPx}
             onChange={(e) => onChangeRadius(Number(e.target.value))}
-            className="w-28 accent-amber-400"
+            className="w-28 accent-[#ff9f0a]"
           />
-          <span className="w-11 text-right font-mono text-[11px] text-zinc-200">
+          <span className="w-12 text-right font-mono text-[13px] font-medium text-white">
             {((poopRadiusPx * 5) / 100).toFixed(2)}m
           </span>
         </div>
 
         {hazards.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/[0.08] py-3 text-center text-[11px] text-zinc-500">
-            No active pet hazards marked on your house map.
+          <div className="ios-group py-3.5 text-center text-[13px] text-[#c7c7cc]">
+            No active pet hazards marked.
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="ios-group divide-y divide-white/[0.06] overflow-hidden">
             {hazards.map((h) => (
-              <div
-                key={h.id}
-                className="flex items-center justify-between rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2 text-xs"
-              >
+              <div key={h.id} className="flex items-center justify-between px-4 py-3 text-[13px]">
                 <div>
-                  <span className="font-medium text-amber-200">💩 {h.label}</span>
-                  <span className="ml-2 font-mono text-[10px] text-zinc-400">
-                    {h.created_at} · {((h.radius_px * 10) / 100).toFixed(1)}m box
+                  <span className="font-medium text-white">💩 {h.label}</span>
+                  <span className="ml-2 font-mono text-[12px] text-[#c7c7cc]">
+                    {h.created_at} · {((h.radius_px * 10) / 100).toFixed(1)}m
                   </span>
                 </div>
                 <button
                   onClick={() => onDeleteHazard(h.id)}
-                  title="Cleaned up — remove No-Go bubble"
-                  className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/25"
+                  className="flex items-center gap-1 rounded-full bg-[#30d158]/20 px-3 py-1 text-[12px] font-semibold text-[#30d158] hover:bg-[#30d158]/30"
                 >
-                  <Trash2 className="h-3 w-3" /> Clear
+                  <Trash2 className="h-3.5 w-3.5" /> Clear
                 </button>
               </div>
             ))}
@@ -213,55 +200,54 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
         )}
       </div>
 
-      {/* Live Room Camera Floor-Anomaly Detector */}
-      <div className="space-y-2.5 border-t border-white/[0.07] pt-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-            <Radio className={`h-3.5 w-3.5 ${visionArmed ? 'animate-pulse text-emerald-400' : 'text-zinc-500'}`} />
+      <div className="space-y-2.5 pt-1">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-[#c7c7cc]">
+            <Radio className={`h-3.5 w-3.5 ${visionArmed ? 'animate-pulse text-[#30d158]' : 'text-[#c7c7cc]'}`} />
             Camera Floor Watch
           </div>
           {!camActive ? (
             <button
               onClick={startCamera}
-              className="flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-zinc-200 hover:bg-white/[0.1]"
+              className="flex items-center gap-1.5 rounded-full bg-[#2c2c2e] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#3a3a3c]"
             >
               <Camera className="h-3.5 w-3.5" /> Enable Cam
             </button>
           ) : (
             <button
               onClick={stopCamera}
-              className="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-500/20"
+              className="flex items-center gap-1 rounded-full bg-[#ff453a]/20 px-3 py-1.5 text-[12px] font-medium text-[#ff6961]"
             >
-              <VideoOff className="h-3 w-3" /> Stop
+              <VideoOff className="h-3.5 w-3.5" /> Stop
             </button>
           )}
         </div>
 
-        {camError && <p className="text-[11px] text-rose-400">{camError}</p>}
+        {camError && <p className="px-1 text-[12px] text-[#ff6961]">{camError}</p>}
 
         {camActive && (
-          <div className="space-y-2">
-            <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-black">
-              <video ref={videoRef} muted playsInline className="h-32 w-full object-cover" />
+          <div className="ios-group space-y-3 p-3">
+            <div className="relative overflow-hidden rounded-xl bg-black">
+              <video ref={videoRef} muted playsInline className="h-36 w-full object-cover" />
               {alertTriggered && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-950/80 text-center">
-                  <AlertTriangle className="mb-1 h-6 w-6 text-rose-400" />
-                  <div className="text-xs font-semibold text-rose-200">HAZARD DETECTED</div>
-                  <div className="text-[10px] text-rose-300">Robot Paused & Returning to Dock</div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#ff453a]/85 text-center">
+                  <AlertTriangle className="mb-1 h-6 w-6 text-white" />
+                  <div className="text-[13px] font-bold text-white">HAZARD DETECTED</div>
+                  <div className="text-[12px] text-white/90">Paused & Returning to Dock</div>
                 </div>
               )}
-              <div className="absolute bottom-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">
+              <div className="absolute bottom-2 right-2 rounded-full bg-black/75 px-2.5 py-0.5 font-mono text-[11px] text-white">
                 Blob: {anomalyPct}%
               </div>
             </div>
 
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <button
                 onClick={captureBaseline}
-                className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-white/[0.1] bg-white/[0.05] py-1.5 text-[11px] font-medium text-zinc-200 hover:bg-white/[0.1]"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#3a3a3c] py-2.5 text-[13px] font-medium text-white hover:bg-[#48484a]"
               >
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                {hasBaseline ? 'Reset Clean Floor' : 'Capture Clean Floor'}
+                <CheckCircle2 className="h-4 w-4 text-[#30d158]" />
+                {hasBaseline ? 'Reset Floor' : 'Capture Clean Floor'}
               </button>
               <button
                 disabled={!hasBaseline}
@@ -269,17 +255,15 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
                   setAlertTriggered(false);
                   setVisionArmed(!visionArmed);
                 }}
-                className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-40 ${
-                  visionArmed
-                    ? 'bg-emerald-500 text-zinc-950'
-                    : 'border border-white/[0.1] bg-white/[0.05] text-zinc-200 hover:bg-white/[0.1]'
+                className={`rounded-xl px-4 py-2.5 text-[13px] font-semibold transition disabled:opacity-40 ${
+                  visionArmed ? 'bg-[#30d158] text-black' : 'bg-[#0a84ff] text-white'
                 }`}
               >
                 {visionArmed ? 'Armed' : 'Arm'}
               </button>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+            <div className="flex items-center justify-between px-1 text-[13px] text-[#c7c7cc]">
               <span>Sensitivity</span>
               <input
                 type="range"
@@ -287,9 +271,9 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
                 max={55}
                 value={sensitivity}
                 onChange={(e) => setSensitivity(Number(e.target.value))}
-                className="w-32 accent-emerald-400"
+                className="w-36 accent-[#30d158]"
               />
-              <span className="font-mono text-zinc-300">{sensitivity}</span>
+              <span className="font-mono text-white">{sensitivity}</span>
             </div>
           </div>
         )}

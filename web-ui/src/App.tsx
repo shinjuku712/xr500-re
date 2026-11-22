@@ -22,6 +22,7 @@ import {
   Grid,
   Route,
   Search,
+  Radar,
 } from 'lucide-react';
 import { api } from './api';
 import type {
@@ -48,24 +49,24 @@ const BatteryRing: React.FC<{ pct: number; charging: boolean }> = ({ pct, chargi
   const r = 7;
   const circ = 2 * Math.PI * r;
   const offset = circ - (clamped / 100) * circ;
-  const stroke = clamped >= 35 ? '#34d399' : clamped >= 18 ? '#fbbf24' : '#f43f5e';
+  const stroke = clamped >= 35 ? '#30d158' : clamped >= 18 ? '#ff9f0a' : '#ff453a';
   return (
     <div className="flex items-center gap-1.5">
       <svg width="18" height="18" viewBox="0 0 18 18" className="-rotate-90">
-        <circle cx="9" cy="9" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
+        <circle cx="9" cy="9" r={r} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="2.2" />
         <circle
           cx="9"
           cy="9"
           r={r}
           fill="none"
           stroke={stroke}
-          strokeWidth="2"
+          strokeWidth="2.2"
           strokeDasharray={circ}
           strokeDashoffset={offset}
           strokeLinecap="round"
         />
       </svg>
-      <span className="font-mono text-[11px] font-medium text-zinc-200">
+      <span className="font-mono text-[12px] font-semibold text-white">
         {clamped}%{charging ? '⚡' : ''}
       </span>
     </div>
@@ -288,6 +289,28 @@ export default function App() {
     [pushToast, refreshAll]
   );
 
+  const handleQuickMap = useCallback(async () => {
+    await api.quickMap();
+    pushToast('Quick Map started — suction & mop off, exploring house');
+    refreshAll();
+  }, [pushToast, refreshAll]);
+
+  const handleSegmentRooms = useCallback(async () => {
+    await api.segmentRooms();
+    pushToast('Requested room auto-segmentation');
+    refreshAll();
+  }, [pushToast, refreshAll]);
+
+  const handleResetMap = useCallback(async () => {
+    await api.resetMap();
+    setSelectedRoomIds([]);
+    setSelectedPlaceIds([]);
+    setDraftZones([]);
+    setDraftPin(null);
+    pushToast('Saved map cleared on robot');
+    refreshAll();
+  }, [pushToast, refreshAll]);
+
   const rooms = mapState?.floorplan.rooms ?? [];
   const customPlaces = mapState?.floorplan.custom_places ?? [];
   const hazards = mapState?.floorplan.poop_hazards ?? [];
@@ -373,8 +396,8 @@ export default function App() {
   ];
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#08090c] text-zinc-100">
-      {/* FULL-BLEED ARCHITECTURAL SLAM CANVAS */}
+    <div className="relative h-screen w-screen overflow-hidden bg-black text-white">
+      {/* FULL-BLEED SLAM CANVAS */}
       <HouseMapCanvas
         mapState={mapState}
         toolMode={toolMode}
@@ -418,46 +441,84 @@ export default function App() {
         showTrajectory={showTrajectory}
       />
 
-      {/* TOP STUDIO TELEMETRY BAR */}
+      {/* EMPTY-MAP ONBOARDING CARD (BRAND-NEW / UNMAPPED ROBOT) */}
+      {mapState && !mapState.floorplan.is_real_slam && (
+        <div className="pointer-events-none fixed inset-0 z-20 flex items-center justify-center p-4">
+          <div className="ios-sheet pointer-events-auto w-full max-w-md rounded-[28px] p-6 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0a84ff]/20 text-[#64d2ff]">
+              <Radar className="h-6 w-6" />
+            </div>
+            <h2 className="text-[18px] font-semibold tracking-tight text-white">No Floorplan Saved Yet</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-[#c7c7cc]">
+              Start a silent <span className="font-semibold text-white">Quick Map</span> run. Your robot will turn off
+              suction and water, scan every room with LiDAR, and return to its dock to auto-segment rooms.
+            </p>
+            <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
+              <button
+                onClick={() => runWithPoopCheck('Quick Map House (Silent)', handleQuickMap)}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-[#0a84ff] px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-[#409cff] active:scale-[0.98]"
+              >
+                <Radar className="h-4 w-4" />
+                Quick Map House (Silent)
+              </button>
+              <button
+                onClick={async () => {
+                  setSyncing(true);
+                  try {
+                    await api.syncMap();
+                    await refreshAll();
+                    pushToast('Checked robot for saved SLAM map');
+                  } finally {
+                    setSyncing(false);
+                  }
+                }}
+                className="rounded-2xl bg-[#2c2c2e] px-4 py-3 text-[13px] font-medium text-white transition hover:bg-[#3a3a3c]"
+              >
+                Sync Map
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOP iOS TELEMETRY BAR (BORDERLESS) */}
       <header className="pointer-events-none fixed inset-x-0 top-4 z-30 flex items-center justify-between gap-3 px-5">
         {/* Left: Hardware Identity + Live Telemetry */}
-        <div className="glass-pill pointer-events-auto flex items-center gap-3.5 rounded-full px-4 py-2">
+        <div className="ios-pill pointer-events-auto flex items-center gap-3.5 rounded-full px-4 py-2">
           <div className="flex items-center gap-2">
             <span
-              className={`h-2 w-2 rounded-full ${
+              className={`h-2.5 w-2.5 rounded-full ${
                 status?.online && !status?.simulation
-                  ? 'bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.85)]'
-                  : 'bg-amber-400'
+                  ? 'bg-[#30d158] shadow-[0_0_10px_rgba(48,209,88,0.7)]'
+                  : 'bg-[#ff9f0a]'
               }`}
             />
-            <span className="text-xs font-semibold tracking-tight text-white">XR500</span>
-            <span className="hidden font-mono text-[10.5px] text-zinc-500 sm:inline">
+            <span className="text-[13px] font-semibold tracking-tight text-white">XR500</span>
+            <span className="hidden font-mono text-[11px] text-[#c7c7cc] sm:inline">
               {status?.ip ?? 'connecting…'}
             </span>
           </div>
 
-          <div className="h-3.5 w-px bg-white/[0.1]" />
-
           <div className="flex items-center gap-3">
-            <span className="font-mono text-[11px] capitalize text-zinc-300">
+            <span className="rounded-full bg-[#2c2c2e] px-2.5 py-0.5 font-mono text-[11px] font-medium capitalize text-white">
               {(status?.status ?? 'standby').replace('_', ' ')}
             </span>
             <BatteryRing pct={battery} charging={isCharging} />
-            <span className="hidden font-mono text-[11px] text-zinc-400 md:inline">
+            <span className="hidden font-mono text-[12px] text-[#e5e5ea] md:inline">
               {status?.clean_area_m2 ?? 0}m² · {status?.clean_time_min ?? 0}m
             </span>
           </div>
         </div>
 
-        {/* Center/Right: Spotlight Search + Controls */}
-        <div className="glass-pill pointer-events-auto flex items-center gap-1 rounded-full p-1">
+        {/* Right: Spotlight Search + Controls */}
+        <div className="ios-pill pointer-events-auto flex items-center gap-1 rounded-full p-1.5">
           <button
             onClick={() => setPaletteOpen(true)}
-            className="hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-100 lg:flex"
+            className="hidden items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-medium text-[#e5e5ea] transition hover:bg-[#2c2c2e] hover:text-white lg:flex"
           >
-            <Search className="h-3.5 w-3.5" />
-            <span>Quick Command</span>
-            <span className="kbd-cap">⌘K</span>
+            <Search className="h-3.5 w-3.5 text-[#c7c7cc]" />
+            <span>Search</span>
+            <span className="ios-kbd">⌘K</span>
           </button>
 
           <button
@@ -465,16 +526,16 @@ export default function App() {
               setInspectorTab('poop');
               setInspectorOpen(true);
             }}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium transition ${
               hazards.length > 0 || preFlightGate
-                ? 'bg-amber-500/15 text-amber-200 hover:bg-amber-500/25'
-                : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200'
+                ? 'bg-[#ff9f0a]/20 text-[#ffd60a] hover:bg-[#ff9f0a]/30'
+                : 'text-[#e5e5ea] hover:bg-[#2c2c2e] hover:text-white'
             }`}
           >
             <ShieldAlert className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Poop Guard</span>
             {hazards.length > 0 && (
-              <span className="rounded-full bg-amber-400 px-1.5 font-mono text-[10px] font-bold text-zinc-950">
+              <span className="rounded-full bg-[#ff9f0a] px-1.5 font-mono text-[11px] font-bold text-black">
                 {hazards.length}
               </span>
             )}
@@ -493,29 +554,29 @@ export default function App() {
               }
             }}
             title="Sync Map"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-[#e5e5ea] transition hover:bg-[#2c2c2e] hover:text-white"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           </button>
 
           <button
             onClick={() => setShowTrajectory((v) => !v)}
             title="Toggle Path"
             className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
-              showTrajectory ? 'bg-white/[0.1] text-sky-300' : 'text-zinc-500 hover:text-zinc-200'
+              showTrajectory ? 'bg-[#0a84ff]/25 text-[#64d2ff]' : 'text-[#c7c7cc] hover:bg-[#2c2c2e] hover:text-white'
             }`}
           >
-            <Route className="h-3.5 w-3.5" />
+            <Route className="h-4 w-4" />
           </button>
 
           <button
             onClick={() => setShowGrid((v) => !v)}
             title="Toggle Grid"
             className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
-              showGrid ? 'bg-white/[0.1] text-white' : 'text-zinc-500 hover:text-zinc-200'
+              showGrid ? 'bg-[#3a3a3c] text-white' : 'text-[#c7c7cc] hover:bg-[#2c2c2e] hover:text-white'
             }`}
           >
-            <Grid className="h-3.5 w-3.5" />
+            <Grid className="h-4 w-4" />
           </button>
 
           <button
@@ -523,40 +584,40 @@ export default function App() {
               setInspectorOpen((v) => !v);
               refreshDps();
             }}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition ${
               inspectorOpen
-                ? 'bg-white text-zinc-950'
-                : 'text-zinc-200 hover:bg-white/[0.08]'
+                ? 'bg-[#0a84ff] text-white'
+                : 'bg-[#2c2c2e] text-white hover:bg-[#3a3a3c]'
             }`}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
-            Studio
+            Controls
           </button>
         </div>
       </header>
 
       {/* FLOATING LEFT ZOOM PILL */}
-      <div className="glass-pill fixed left-5 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1 rounded-full p-1">
+      <div className="ios-pill fixed left-5 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1 rounded-full p-1.5">
         <button
           onClick={() => setZoomDelta((z) => ({ dir: 1, seq: z.seq + 1 }))}
           title="Zoom In"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-[#e5e5ea] transition hover:bg-[#2c2c2e] hover:text-white"
         >
-          <ZoomIn className="h-3.5 w-3.5" />
+          <ZoomIn className="h-4 w-4" />
         </button>
         <button
           onClick={() => setZoomDelta((z) => ({ dir: -1, seq: z.seq + 1 }))}
           title="Zoom Out"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-[#e5e5ea] transition hover:bg-[#2c2c2e] hover:text-white"
         >
-          <ZoomOut className="h-3.5 w-3.5" />
+          <ZoomOut className="h-4 w-4" />
         </button>
         <button
           onClick={() => setFitTrigger((n) => n + 1)}
           title="Fit to Screen (R)"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-[#e5e5ea] transition hover:bg-[#2c2c2e] hover:text-white"
         >
-          <Maximize2 className="h-3.5 w-3.5" />
+          <Maximize2 className="h-4 w-4" />
         </button>
       </div>
 
@@ -569,48 +630,48 @@ export default function App() {
         draftZones.length > 0 ||
         draftPin) && (
         <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 flex justify-center px-4">
-          <div className="glass-pill pointer-events-auto flex items-center gap-3 rounded-full px-4 py-1.5 text-xs">
+          <div className="ios-pill pointer-events-auto flex items-center gap-3.5 rounded-full px-4 py-2 text-[13px]">
             {toolMode === 'place' && (
-              <span className="text-zinc-300">
+              <span className="text-[#e5e5ea]">
                 Drag over any area (e.g. <span className="font-semibold text-white">Corridor</span>) to save as a clickable Place
               </span>
             )}
             {toolMode === 'brush' && (
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-400">Brush</span>
+              <div className="flex items-center gap-2.5">
+                <span className="text-[#c7c7cc]">Brush</span>
                 <input
                   type="range"
                   min={6}
                   max={24}
                   value={brushRadiusPx}
                   onChange={(e) => setBrushRadiusPx(Number(e.target.value))}
-                  className="w-24 accent-sky-400"
+                  className="w-24 accent-[#0a84ff]"
                 />
-                <span className="font-mono text-[11px] text-zinc-200">
+                <span className="font-mono text-[12px] font-medium text-white">
                   {((brushRadiusPx * 10) / 100).toFixed(1)}m
                 </span>
               </div>
             )}
             {toolMode === 'pin' && (
-              <label className="flex cursor-pointer items-center gap-1.5 text-zinc-200">
+              <label className="flex cursor-pointer items-center gap-2 text-white">
                 <input
                   type="checkbox"
                   checked={spotClean}
                   onChange={(e) => setSpotClean(e.target.checked)}
-                  className="accent-sky-400"
+                  className="accent-[#0a84ff]"
                 />
                 Spot Clean Spiral
               </label>
             )}
             {(selectedRoomIds.length > 0 || selectedPlaceIds.length > 0) && (
               <div className="flex items-center gap-1.5">
-                <span className="text-zinc-400">Passes</span>
+                <span className="text-[#c7c7cc]">Passes</span>
                 {[1, 2].map((p) => (
                   <button
                     key={p}
                     onClick={() => setRoomPasses(p)}
-                    className={`rounded-full px-2.5 py-0.5 font-mono text-[11px] font-semibold transition ${
-                      roomPasses === p ? 'bg-white text-zinc-950' : 'text-zinc-400 hover:text-white'
+                    className={`rounded-full px-2.5 py-0.5 font-mono text-[12px] font-semibold transition ${
+                      roomPasses === p ? 'bg-[#0a84ff] text-white' : 'bg-[#2c2c2e] text-[#e5e5ea] hover:bg-[#3a3a3c]'
                     }`}
                   >
                     {p}×
@@ -626,7 +687,7 @@ export default function App() {
                   setDraftZones([]);
                   setDraftPin(null);
                 }}
-                className="flex items-center gap-1 text-zinc-400 hover:text-rose-300"
+                className="flex items-center gap-1 text-[13px] font-medium text-[#ff453a] hover:text-[#ff6961]"
               >
                 <Trash2 className="h-3.5 w-3.5" /> Clear
               </button>
@@ -635,9 +696,9 @@ export default function App() {
         </div>
       )}
 
-      {/* FLOATING HARDWARE BOTTOM DOCK */}
+      {/* FLOATING iOS BOTTOM DOCK (BORDERLESS) */}
       <footer className="pointer-events-none fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
-        <div className="glass-pill pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-full p-1.5">
+        <div className="ios-pill pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-full p-1.5">
           <div className="flex items-center gap-0.5">
             {dockTools.map((t) => {
               const active = toolMode === t.id;
@@ -646,12 +707,12 @@ export default function App() {
                   key={t.id}
                   onClick={() => setToolMode(t.id)}
                   title={`${t.label} (${t.k})`}
-                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-2 text-xs font-medium transition ${
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-[13px] font-medium transition ${
                     active
                       ? t.warn
-                        ? 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-400/40'
-                        : 'bg-white text-zinc-950 shadow-sm'
-                      : 'text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100'
+                        ? 'bg-[#ff9f0a] text-black font-semibold'
+                        : 'bg-[#3a3a3c] text-white font-semibold'
+                      : 'text-[#e5e5ea] hover:bg-[#2c2c2e] hover:text-white'
                   }`}
                 >
                   {t.icon}
@@ -661,17 +722,15 @@ export default function App() {
             })}
           </div>
 
-          <div className="h-5 w-px bg-white/[0.1]" />
-
           <button
             onClick={primary.onClick}
-            className="flex items-center gap-2 rounded-full bg-sky-400 px-4 py-2 text-xs font-semibold text-zinc-950 shadow-[0_0_20px_rgba(56,189,248,0.35)] transition hover:bg-sky-300 active:scale-[0.98]"
+            className="flex items-center gap-2 rounded-full bg-[#0a84ff] px-4 py-2 text-[13px] font-semibold text-white shadow-[0_6px_20px_rgba(10,132,255,0.4)] transition hover:bg-[#409cff] active:scale-[0.98]"
           >
             <Play className="h-3.5 w-3.5 fill-current" />
             {primary.label}
           </button>
 
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1">
             <button
               onClick={async () => {
                 await api.sendCommand('pause');
@@ -679,7 +738,7 @@ export default function App() {
                 refreshAll();
               }}
               title="Pause"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2c2c2e] text-white transition hover:bg-[#3a3a3c]"
             >
               <Pause className="h-4 w-4" />
             </button>
@@ -690,7 +749,7 @@ export default function App() {
                 refreshAll();
               }}
               title="Return to Dock"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2c2c2e] text-white transition hover:bg-[#3a3a3c]"
             >
               <Home className="h-4 w-4" />
             </button>
@@ -700,7 +759,7 @@ export default function App() {
                 pushToast('Locate beep triggered');
               }}
               title="Locate Robot"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2c2c2e] text-white transition hover:bg-[#3a3a3c]"
             >
               <Volume2 className="h-4 w-4" />
             </button>
@@ -708,7 +767,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* COLLAPSIBLE STUDIO INSPECTOR */}
+      {/* COLLAPSIBLE iOS CONTROLS SHEET */}
       <InspectorPanel
         open={inspectorOpen}
         tab={inspectorTab}
@@ -763,6 +822,9 @@ export default function App() {
           pushToast(`Reset ${part} counter`);
           refreshAll();
         }}
+        onQuickMap={() => runWithPoopCheck('Quick Map House (Silent)', handleQuickMap)}
+        onSegmentRooms={handleSegmentRooms}
+        onResetMap={handleResetMap}
         hazards={hazards}
         poopRadiusPx={poopRadiusPx}
         onChangePoopRadius={setPoopRadiusPx}
@@ -796,6 +858,7 @@ export default function App() {
         rooms={rooms}
         places={customPlaces}
         presets={presets}
+        onQuickMap={() => runWithPoopCheck('Quick Map House (Silent)', handleQuickMap)}
         onCommand={(cmd) => {
           if (cmd === 'start' || cmd === 'wallfollow') {
             runWithPoopCheck(cmd === 'start' ? 'Full-house clean' : 'Wall-follow clean', async () => {
@@ -832,33 +895,33 @@ export default function App() {
         }}
       />
 
-      {/* PRE-FLIGHT POOP CHECK SAFETY GATE */}
+      {/* PRE-FLIGHT POOP CHECK SAFETY GATE (BORDERLESS iOS ALERT) */}
       {pendingAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md">
-          <div className="glass-panel w-full max-w-sm rounded-2xl p-5">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-300">
-              <span className="text-lg">💩</span> Pre-Flight Floor Check
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-md">
+          <div className="ios-sheet w-full max-w-sm rounded-[28px] p-6">
+            <div className="mb-2 flex items-center gap-2 text-[16px] font-semibold text-[#ffd60a]">
+              <span className="text-xl">💩</span> Pre-Flight Floor Check
             </div>
-            <p className="text-xs leading-relaxed text-zinc-300">
+            <p className="text-[14px] leading-relaxed text-[#e5e5ea]">
               About to run: <span className="font-semibold text-white">{pendingAction.label}</span>.
               {hazards.length > 0
                 ? ` ${hazards.length} active Poop No-Go bubble(s) are locked onto the robot.`
                 : ' Quick check — is the floor clear of dog poop?'}
             </p>
-            <div className="mt-5 flex items-center justify-end gap-2">
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
               <button
                 onClick={() => {
                   setPendingAction(null);
                   setToolMode('poop');
                   pushToast('Click the map to mark the hazard first');
                 }}
-                className="rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-xs font-medium text-amber-200 hover:bg-amber-500/25"
+                className="rounded-2xl bg-[#ff9f0a]/20 px-3.5 py-2.5 text-[13px] font-semibold text-[#ffd60a] transition hover:bg-[#ff9f0a]/30"
               >
                 Drop Poop Pin
               </button>
               <button
                 onClick={() => setPendingAction(null)}
-                className="rounded-xl px-3 py-2 text-xs text-zinc-400 hover:text-white"
+                className="rounded-2xl bg-[#2c2c2e] px-3.5 py-2.5 text-[13px] font-medium text-[#e5e5ea] transition hover:bg-[#3a3a3c] hover:text-white"
               >
                 Cancel
               </button>
@@ -868,7 +931,7 @@ export default function App() {
                   setPendingAction(null);
                   await run();
                 }}
-                className="rounded-xl bg-sky-400 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-sky-300"
+                className="rounded-2xl bg-[#0a84ff] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#409cff]"
               >
                 Floor Clear · Go
               </button>
@@ -877,16 +940,16 @@ export default function App() {
         </div>
       )}
 
-      {/* MINIMAL TOAST */}
+      {/* iOS PILL TOAST */}
       {toast && (
-        <div className="glass-pill pointer-events-none fixed top-18 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-1.5 text-xs text-zinc-100">
+        <div className="ios-pill pointer-events-none fixed top-20 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-[13px] font-medium text-white">
           {toast}
         </div>
       )}
 
-      {/* CREATE / EDIT PERMANENT CUSTOM PLACE MODAL */}
+      {/* CREATE / EDIT PERMANENT CUSTOM PLACE MODAL (BORDERLESS iOS SHEET) */}
       {(newPlaceRect || editingPlace) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-md">
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -911,12 +974,12 @@ export default function App() {
               }
               refreshAll();
             }}
-            className="glass-panel w-full max-w-sm rounded-2xl p-5"
+            className="ios-sheet w-full max-w-sm rounded-[28px] p-6"
           >
-            <h3 className="text-sm font-semibold text-white">
-              {newPlaceRect ? 'Save New Clickable Place' : `Edit "${editingPlace?.name}"`}
+            <h3 className="text-[17px] font-semibold text-white">
+              {newPlaceRect ? 'Save Clickable Place' : `Edit "${editingPlace?.name}"`}
             </h3>
-            <p className="mt-0.5 text-[11px] text-zinc-400">
+            <p className="mt-1 text-[13px] text-[#c7c7cc]">
               Spans across any rooms — saved permanently on your house map.
             </p>
 
@@ -926,37 +989,37 @@ export default function App() {
               onChange={(e) => setPlaceNameInput(e.target.value)}
               placeholder="e.g. Corridor, Entryway, Under Table"
               autoFocus
-              className="mt-3 w-full rounded-xl border border-white/[0.1] bg-white/[0.05] px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-sky-400/50 focus:outline-none"
+              className="mt-4 w-full rounded-2xl bg-[#2c2c2e] px-4 py-3 text-[15px] text-white placeholder:text-[#8e8e93] focus:bg-[#3a3a3c] focus:outline-none"
             />
 
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {['Corridor', 'Entryway', 'Kitchen Counter', 'Dining Table', 'Dog Corner'].map((chip) => (
                 <button
                   key={chip}
                   type="button"
                   onClick={() => setPlaceNameInput(chip)}
-                  className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] text-zinc-300 hover:bg-white/[0.1] hover:text-white"
+                  className="rounded-full bg-[#2c2c2e] px-3 py-1.5 text-[12px] font-medium text-[#e5e5ea] transition hover:bg-[#3a3a3c] hover:text-white"
                 >
                   {chip}
                 </button>
               ))}
             </div>
 
-            <div className="mt-3.5 flex gap-2">
-              {['#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#f472b6', '#e2e8f0'].map((c) => (
+            <div className="mt-4 flex gap-2.5">
+              {['#0a84ff', '#30d158', '#ff9f0a', '#bf5af2', '#ff375f', '#64d2ff'].map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setPlaceColorInput(c)}
-                  className={`h-6 w-6 rounded-full transition ${
-                    placeColorInput === c ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-900' : 'opacity-70 hover:opacity-100'
+                  className={`h-7 w-7 rounded-full transition ${
+                    placeColorInput === c ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-[#1c1c1e]' : 'opacity-75 hover:opacity-100'
                   }`}
                   style={{ backgroundColor: c }}
                 />
               ))}
             </div>
 
-            <div className="mt-5 flex items-center justify-between">
+            <div className="mt-6 flex items-center justify-between">
               {editingPlace ? (
                 <button
                   type="button"
@@ -967,7 +1030,7 @@ export default function App() {
                     pushToast(`Deleted "${editingPlace.name}"`);
                     refreshAll();
                   }}
-                  className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-300 hover:bg-rose-500/20"
+                  className="rounded-2xl bg-[#ff453a]/15 px-3.5 py-2.5 text-[13px] font-semibold text-[#ff453a] transition hover:bg-[#ff453a]/25"
                 >
                   Delete
                 </button>
@@ -981,13 +1044,13 @@ export default function App() {
                     setNewPlaceRect(null);
                     setEditingPlace(null);
                   }}
-                  className="rounded-xl px-3 py-2 text-xs text-zinc-400 hover:text-white"
+                  className="rounded-2xl bg-[#2c2c2e] px-4 py-2.5 text-[13px] font-medium text-[#e5e5ea] transition hover:bg-[#3a3a3c] hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-sky-400 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-sky-300"
+                  className="rounded-2xl bg-[#0a84ff] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#409cff]"
                 >
                   {newPlaceRect ? 'Save Place' : 'Update'}
                 </button>
