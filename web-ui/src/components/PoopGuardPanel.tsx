@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShieldAlert, Camera, VideoOff, Trash2, CheckCircle2, AlertTriangle, Radio } from 'lucide-react';
 import type { PoopHazard } from '../types';
+import { Ios26Slider, Ios26Toggle } from './IosControls';
 
 interface PoopGuardPanelProps {
   hazards: PoopHazard[];
@@ -130,20 +131,11 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
           <div className="text-[14px] font-medium text-white">Pre-Flight Floor Check</div>
           <div className="text-[12px] text-[#c7c7cc]">Confirm floor is clear before starting</div>
         </div>
-        <button
-          role="switch"
-          aria-checked={preFlightGate}
-          onClick={() => onTogglePreFlight(!preFlightGate)}
-          className={`relative h-[28px] w-[48px] rounded-full transition-colors ${
-            preFlightGate ? 'bg-[#30d158]' : 'bg-[#48484a]'
-          }`}
-        >
-          <span
-            className={`absolute top-[2px] h-[24px] w-[24px] rounded-full bg-white shadow transition-all ${
-              preFlightGate ? 'left-[22px]' : 'left-[2px]'
-            }`}
-          />
-        </button>
+        <Ios26Toggle
+          checked={preFlightGate}
+          onChange={onTogglePreFlight}
+          ariaLabel="Pre-Flight Floor Check"
+        />
       </div>
 
       <div className="space-y-2.5">
@@ -159,17 +151,18 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
           </button>
         </div>
 
-        <div className="ios-group flex items-center justify-between gap-3 px-4 py-3">
-          <span className="text-[13px] text-[#c7c7cc]">Buffer Radius</span>
-          <input
-            type="range"
+        <div className="ios-group flex items-center justify-between gap-3.5 px-4 py-3.5">
+          <span className="shrink-0 text-[13px] font-medium text-[#e5e5ea]">Buffer Radius</span>
+          <Ios26Slider
             min={6}
             max={20}
             value={poopRadiusPx}
-            onChange={(e) => onChangeRadius(Number(e.target.value))}
-            className="w-28 accent-[#ff9f0a]"
+            onChange={onChangeRadius}
+            accent="#ff9f0a"
+            className="flex-1"
+            ariaLabel="Buffer Radius"
           />
-          <span className="w-12 text-right font-mono text-[13px] font-medium text-white">
+          <span className="w-12 shrink-0 text-right font-mono text-[13px] font-semibold text-white">
             {((poopRadiusPx * 5) / 100).toFixed(2)}m
           </span>
         </div>
@@ -263,17 +256,18 @@ export const PoopGuardPanel: React.FC<PoopGuardPanelProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center justify-between px-1 text-[13px] text-[#c7c7cc]">
-              <span>Sensitivity</span>
-              <input
-                type="range"
+            <div className="flex items-center justify-between gap-3 px-1 text-[13px] text-[#e5e5ea]">
+              <span className="shrink-0 font-medium">Sensitivity</span>
+              <Ios26Slider
                 min={14}
                 max={55}
                 value={sensitivity}
-                onChange={(e) => setSensitivity(Number(e.target.value))}
-                className="w-36 accent-[#30d158]"
+                onChange={setSensitivity}
+                accent="#30d158"
+                className="flex-1"
+                ariaLabel="Camera Sensitivity"
               />
-              <span className="font-mono text-white">{sensitivity}</span>
+              <span className="w-8 shrink-0 text-right font-mono font-semibold text-white">{sensitivity}</span>
             </div>
           </div>
         )}

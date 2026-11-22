@@ -41,6 +41,7 @@ import { HouseMapCanvas } from './components/HouseMapCanvas';
 import { InspectorPanel, type InspectorTab } from './components/InspectorPanel';
 import { RoomEditModal } from './components/RoomEditModal';
 import { CommandPalette } from './components/CommandPalette';
+import { Ios26Slider, Ios26Toggle } from './components/IosControls';
 
 const PRESETS_KEY = 'xr500_saved_presets_v1';
 
@@ -637,31 +638,32 @@ export default function App() {
               </span>
             )}
             {toolMode === 'brush' && (
-              <div className="flex items-center gap-2.5">
-                <span className="text-[#c7c7cc]">Brush</span>
-                <input
-                  type="range"
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-[#e5e5ea]">Brush</span>
+                <Ios26Slider
                   min={6}
                   max={24}
                   value={brushRadiusPx}
-                  onChange={(e) => setBrushRadiusPx(Number(e.target.value))}
-                  className="w-24 accent-[#0a84ff]"
+                  onChange={setBrushRadiusPx}
+                  accent="#0a84ff"
+                  className="w-28"
+                  ariaLabel="Brush Size"
                 />
-                <span className="font-mono text-[12px] font-medium text-white">
+                <span className="font-mono text-[12px] font-semibold text-white">
                   {((brushRadiusPx * 10) / 100).toFixed(1)}m
                 </span>
               </div>
             )}
             {toolMode === 'pin' && (
-              <label className="flex cursor-pointer items-center gap-2 text-white">
-                <input
-                  type="checkbox"
+              <div className="flex items-center gap-2.5 text-white">
+                <span className="font-medium">Spot Clean Spiral</span>
+                <Ios26Toggle
                   checked={spotClean}
-                  onChange={(e) => setSpotClean(e.target.checked)}
-                  className="accent-[#0a84ff]"
+                  onChange={setSpotClean}
+                  accent="blue"
+                  ariaLabel="Spot Clean Spiral"
                 />
-                Spot Clean Spiral
-              </label>
+              </div>
             )}
             {(selectedRoomIds.length > 0 || selectedPlaceIds.length > 0) && (
               <div className="flex items-center gap-1.5">
@@ -989,7 +991,7 @@ export default function App() {
               onChange={(e) => setPlaceNameInput(e.target.value)}
               placeholder="e.g. Corridor, Entryway, Under Table"
               autoFocus
-              className="mt-4 w-full rounded-2xl bg-[#2c2c2e] px-4 py-3 text-[15px] text-white placeholder:text-[#8e8e93] focus:bg-[#3a3a3c] focus:outline-none"
+              className="ios26-input mt-4 w-full px-4 py-3 text-[15px]"
             />
 
             <div className="mt-3 flex flex-wrap gap-1.5">

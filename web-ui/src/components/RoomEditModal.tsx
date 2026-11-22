@@ -65,7 +65,7 @@ export const RoomEditModal: React.FC<RoomEditModalProps> = ({ room, onClose, onS
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl bg-[#2c2c2e] px-3.5 py-2.5 text-[15px] text-white focus:outline-none focus:ring-2 focus:ring-[#0a84ff]"
+              className="ios26-input w-full px-4 py-3 text-[15px]"
               autoFocus
             />
           </div>
@@ -91,36 +91,54 @@ export const RoomEditModal: React.FC<RoomEditModalProps> = ({ room, onClose, onS
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
             <div>
               <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-[#c7c7cc]">
                 Suction
               </label>
-              <select
-                value={suction}
-                onChange={(e) => setSuction(e.target.value)}
-                className="w-full rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-white focus:outline-none focus:ring-2 focus:ring-[#0a84ff]"
-              >
-                <option value="turnoff">Off</option>
-                <option value="gentle">Quiet</option>
-                <option value="normal">Standard</option>
-                <option value="strong">Max</option>
-              </select>
+              <div className="ios-segmented grid grid-cols-4 gap-1">
+                {[
+                  { id: 'turnoff', label: 'Off' },
+                  { id: 'gentle', label: 'Quiet' },
+                  { id: 'normal', label: 'Std' },
+                  { id: 'strong', label: 'Max' },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setSuction(opt.id)}
+                    className={`rounded-full py-1.5 text-[12.5px] font-semibold transition ${
+                      suction === opt.id ? 'ios-segmented-active' : 'text-[#c7c7cc] hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-[#c7c7cc]">
                 Water
               </label>
-              <select
-                value={water}
-                onChange={(e) => setWater(e.target.value)}
-                className="w-full rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-white focus:outline-none focus:ring-2 focus:ring-[#0a84ff]"
-              >
-                <option value="closed">Dry</option>
-                <option value="low">Low</option>
-                <option value="middle">Medium</option>
-                <option value="high">High</option>
-              </select>
+              <div className="ios-segmented grid grid-cols-4 gap-1">
+                {[
+                  { id: 'closed', label: 'Dry' },
+                  { id: 'low', label: 'Low' },
+                  { id: 'middle', label: 'Med' },
+                  { id: 'high', label: 'High' },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setWater(opt.id)}
+                    className={`rounded-full py-1.5 text-[12.5px] font-semibold transition ${
+                      water === opt.id ? 'ios-segmented-active' : 'text-[#c7c7cc] hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -129,14 +147,14 @@ export const RoomEditModal: React.FC<RoomEditModalProps> = ({ room, onClose, onS
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl bg-[#2c2c2e] px-4 py-2.5 text-[14px] font-medium text-white hover:bg-[#3a3a3c]"
+            className="rounded-full bg-[#2c2c2e] px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-[#3a3a3c]"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="rounded-xl bg-[#0a84ff] px-5 py-2.5 text-[14px] font-semibold text-white hover:bg-[#409cff] disabled:opacity-50"
+            className="rounded-full bg-[#0a84ff] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#409cff] disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
