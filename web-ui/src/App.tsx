@@ -21,6 +21,7 @@ import {
   Trash2,
   Grid,
   Route,
+  Search,
 } from 'lucide-react';
 import { api } from './api';
 import type {
@@ -38,8 +39,38 @@ import type {
 import { HouseMapCanvas } from './components/HouseMapCanvas';
 import { InspectorPanel, type InspectorTab } from './components/InspectorPanel';
 import { RoomEditModal } from './components/RoomEditModal';
+import { CommandPalette } from './components/CommandPalette';
 
 const PRESETS_KEY = 'xr500_saved_presets_v1';
+
+const BatteryRing: React.FC<{ pct: number; charging: boolean }> = ({ pct, charging }) => {
+  const clamped = Math.max(0, Math.min(100, pct));
+  const r = 7;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (clamped / 100) * circ;
+  const stroke = clamped >= 35 ? '#34d399' : clamped >= 18 ? '#fbbf24' : '#f43f5e';
+  return (
+    <div className="flex items-center gap-1.5">
+      <svg width="18" height="18" viewBox="0 0 18 18" className="-rotate-90">
+        <circle cx="9" cy="9" r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
+        <circle
+          cx="9"
+          cy="9"
+          r={r}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="2"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+        />
+      </svg>
+      <span className="font-mono text-[11px] font-medium text-zinc-200">
+        {clamped}%{charging ? '⚡' : ''}
+      </span>
+    </div>
+  );
+};
 
 export default function App() {
   const [status, setStatus] = useState<RobotStatus | null>(null);
@@ -54,7 +85,7 @@ export default function App() {
   const [draftZones, setDraftZones] = useState<DraftZone[]>([]);
   const [draftPin, setDraftPin] = useState<TargetPin | null>(null);
   const [spotClean, setSpotClean] = useState<boolean>(true);
-  const [brushRadiusPx, setBrushRadiusPx] = useState<number>(12); // 12px = 60cm radius
+  const [brushRadiusPx, setBrushRadiusPx] = useState<number>(12);
 
   // Custom Place Modal State
   const [newPlaceRect, setNewPlaceRect] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -63,7 +94,7 @@ export default function App() {
   const [placeColorInput, setPlaceColorInput] = useState('#38bdf8');
 
   // Poop Guard State
-  const [poopRadiusPx, setPoopRadiusPx] = useState<number>(10); // 10px = 50cm radius (1m box)
+  const [poopRadiusPx, setPoopRadiusPx] = useState<number>(10);
   const [preFlightGate, setPreFlightGate] = useState<boolean>(true);
   const [pendingAction, setPendingAction] = useState<{ label: string; run: () => Promise<void> } | null>(null);
 
@@ -77,13 +108,14 @@ export default function App() {
     }
   });
 
-  // View & Inspector State
+  // View, Inspector & Palette State
   const [fitTrigger, setFitTrigger] = useState(0);
   const [zoomDelta, setZoomDelta] = useState({ dir: 0, seq: 0 });
   const [showGrid, setShowGrid] = useState(true);
   const [showTrajectory, setShowTrajectory] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('clean');
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [packets, setPackets] = useState<DispatchedPacket[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -129,16 +161,28 @@ export default function App() {
   useEffect(() => {
     refreshAll();
     refreshDps();
-    const timer = setInterval(() => {
-      refreshAll();
+    // Fast 1.2s map poll to mirror HoSLAM 1Hz live stream smoothly
+    const mapTimer = setInterval(() => {
+      api.getMap().then(setMapState).catch(() => {});
+    }, 1200);
+    const statusTimer = setInterval(() => {
+      api.getStatus().then(setStatus).catch(() => {});
       if (inspectorOpen && inspectorTab === 'lab') refreshDps();
     }, 2500);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(mapTimer);
+      clearInterval(statusTimer);
+    };
   }, [refreshAll, refreshDps, inspectorOpen, inspectorTab]);
 
-  // Keyboard shortcuts
+  // Global keyboard shortcuts (including Cmd/Ctrl+K Command Palette)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+        return;
+      }
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === '1') setToolMode('rooms');
       else if (e.key.toLowerCase() === 'n') setToolMode('place');
@@ -158,13 +202,13 @@ export default function App() {
         setPendingAction(null);
         setNewPlaceRect(null);
         setEditingPlace(null);
+        setPaletteOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Gate cleaning missions with optional Pre-Flight Poop Check
   const runWithPoopCheck = (label: string, fn: () => Promise<void>) => {
     if (preFlightGate) {
       setPendingAction({ label, run: fn });
@@ -172,8 +216,6 @@ export default function App() {
       fn();
     }
   };
-
-  // --- Handlers ---
 
   const handleToggleRoom = useCallback((roomId: number) => {
     setSelectedRoomIds((prev) =>
@@ -194,28 +236,28 @@ export default function App() {
   const executeCleanRooms = async (ids: number[], passes: number) => {
     const res = await api.cleanRooms(ids, passes);
     recordPacket(`Rooms [${ids.join(',')}] (${passes}×)`, res.packet);
-    pushToast(`Cleaning ${ids.length} room(s) · ${passes}× pass`);
+    pushToast(`Cleaning ${ids.length} room(s) · ${passes}×`);
     refreshAll();
   };
 
   const executeCleanZones = async (zones: DraftZone[]) => {
     const res = await api.cleanZones(zones);
     recordPacket(`Zones (${zones.length})`, res.packet);
-    pushToast(`Dispatched ${zones.length} custom zone(s)`);
+    pushToast(`Dispatched ${zones.length} zone(s)`);
     refreshAll();
   };
 
   const executeGotoPin = async (pin: TargetPin) => {
     const res = await api.gotoPoint(pin.x, pin.y, spotClean);
     recordPacket(spotClean ? 'Spot Clean' : 'Go-To', res.packet);
-    pushToast(spotClean ? 'Sent robot to spot clean pin' : 'Navigating robot to pin');
+    pushToast(spotClean ? 'Spot cleaning target pin' : 'Navigating to pin');
     refreshAll();
   };
 
   const handleDropPoop = async (x: number, y: number) => {
-    const res = await api.addPoopHazard(x, y, poopRadiusPx, 'Dog Hazard');
-    recordPacket('Poop No-Go (0x1A)', res.packet);
-    pushToast(`💩 Hazard locked & synced to robot (DP 15 0x1A)`);
+    const res = await api.addPoopHazard(x, y, poopRadiusPx, 'Pet Hazard');
+    if (res.packet) recordPacket('Poop No-Go (0x1A)', res.packet);
+    pushToast('💩 Hazard locked & pushed to robot');
     refreshAll();
   };
 
@@ -256,8 +298,8 @@ export default function App() {
     .toFixed(1);
 
   const battery = status?.battery ?? 0;
+  const isCharging = status?.status === 'charging' || status?.status === 'charge_done';
 
-  // Dynamic primary CTA in bottom dock
   const getPrimaryAction = () => {
     if (selectedPlaceIds.length > 0) {
       const picked = selectedPlaceIds
@@ -306,7 +348,7 @@ export default function App() {
       };
     }
     return {
-      label: 'Full House Clean',
+      label: 'Full Clean',
       onClick: () =>
         runWithPoopCheck('Start full-house auto clean', async () => {
           await api.sendCommand('start');
@@ -319,20 +361,20 @@ export default function App() {
   const primary = getPrimaryAction();
 
   const dockTools: { id: ToolMode; label: string; k: string; icon: React.ReactNode; warn?: boolean }[] = [
-    { id: 'rooms', label: 'Select', k: '1', icon: <MousePointerClick className="h-4 w-4" /> },
-    { id: 'place', label: '+ Place', k: 'N', icon: <MapPinPlus className="h-4 w-4" /> },
-    { id: 'zone', label: 'Zone', k: '2', icon: <SquareDashedMousePointer className="h-4 w-4" /> },
-    { id: 'brush', label: 'Brush', k: '3', icon: <Paintbrush className="h-4 w-4" /> },
-    { id: 'pin', label: 'Pin', k: '4', icon: <Crosshair className="h-4 w-4" /> },
-    { id: 'poop', label: 'Poop', k: '5', icon: <span className="text-sm leading-none">💩</span>, warn: true },
-    { id: 'nogo', label: 'No-Go', k: '6', icon: <ShieldBan className="h-4 w-4" />, warn: true },
-    { id: 'vwall', label: 'Wall', k: '7', icon: <Slash className="h-4 w-4" />, warn: true },
-    { id: 'pan', label: 'Pan', k: '8', icon: <Hand className="h-4 w-4" /> },
+    { id: 'rooms', label: 'Select', k: '1', icon: <MousePointerClick className="h-3.5 w-3.5" /> },
+    { id: 'place', label: '+ Place', k: 'N', icon: <MapPinPlus className="h-3.5 w-3.5" /> },
+    { id: 'zone', label: 'Zone', k: '2', icon: <SquareDashedMousePointer className="h-3.5 w-3.5" /> },
+    { id: 'brush', label: 'Brush', k: '3', icon: <Paintbrush className="h-3.5 w-3.5" /> },
+    { id: 'pin', label: 'Pin', k: '4', icon: <Crosshair className="h-3.5 w-3.5" /> },
+    { id: 'poop', label: 'Poop', k: '5', icon: <span className="text-xs leading-none">💩</span>, warn: true },
+    { id: 'nogo', label: 'No-Go', k: '6', icon: <ShieldBan className="h-3.5 w-3.5" />, warn: true },
+    { id: 'vwall', label: 'Wall', k: '7', icon: <Slash className="h-3.5 w-3.5" />, warn: true },
+    { id: 'pan', label: 'Pan', k: '8', icon: <Hand className="h-3.5 w-3.5" /> },
   ];
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#09090b] text-zinc-100">
-      {/* FULL-BLEED REAL SLAM HOUSE MAP */}
+    <div className="relative h-screen w-screen overflow-hidden bg-[#08090c] text-zinc-100">
+      {/* FULL-BLEED ARCHITECTURAL SLAM CANVAS */}
       <HouseMapCanvas
         mapState={mapState}
         toolMode={toolMode}
@@ -359,8 +401,8 @@ export default function App() {
         onAddNoGo={async (x1, y1, x2, y2) => {
           await api.addNoGoZone(x1, y1, x2, y2);
           const res = await api.pushNoGo();
-          recordPacket('No-Go (0x1A)', res.packet);
-          pushToast('No-Go Zone saved & pushed to robot');
+          if (res.packet) recordPacket('No-Go (0x1A)', res.packet);
+          pushToast('No-Go Zone pushed to robot');
           refreshAll();
         }}
         onAddVWall={async (x1, y1, x2, y2) => {
@@ -376,35 +418,48 @@ export default function App() {
         showTrajectory={showTrajectory}
       />
 
-      {/* FLOATING ULTRA-THIN FROSTED TOP BAR */}
-      <header className="pointer-events-none fixed inset-x-0 top-4 z-30 flex items-center justify-between px-5">
-        {/* Left: Device Identity & Live Telemetry Pill */}
-        <div className="pointer-events-auto flex items-center gap-3.5 rounded-full border border-white/[0.08] bg-zinc-900/45 px-4 py-2 backdrop-blur-2xl">
+      {/* TOP STUDIO TELEMETRY BAR */}
+      <header className="pointer-events-none fixed inset-x-0 top-4 z-30 flex items-center justify-between gap-3 px-5">
+        {/* Left: Hardware Identity + Live Telemetry */}
+        <div className="glass-pill pointer-events-auto flex items-center gap-3.5 rounded-full px-4 py-2">
           <div className="flex items-center gap-2">
             <span
               className={`h-2 w-2 rounded-full ${
                 status?.online && !status?.simulation
-                  ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                  ? 'bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.85)]'
                   : 'bg-amber-400'
               }`}
             />
-            <span className="text-xs font-semibold tracking-tight text-white">XR500T3</span>
-            <span className="font-mono text-[11px] text-zinc-500">{status?.ip ?? 'connecting…'}</span>
+            <span className="text-xs font-semibold tracking-tight text-white">XR500</span>
+            <span className="hidden font-mono text-[10.5px] text-zinc-500 sm:inline">
+              {status?.ip ?? 'connecting…'}
+            </span>
           </div>
 
           <div className="h-3.5 w-px bg-white/[0.1]" />
 
-          <div className="flex items-center gap-3 font-mono text-[11px]">
-            <span className="capitalize text-zinc-300">{status?.status ?? 'connecting'}</span>
-            <span className={battery >= 30 ? 'text-emerald-400' : 'text-rose-400'}>{battery}%</span>
-            <span className="hidden text-zinc-400 sm:inline">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[11px] capitalize text-zinc-300">
+              {(status?.status ?? 'standby').replace('_', ' ')}
+            </span>
+            <BatteryRing pct={battery} charging={isCharging} />
+            <span className="hidden font-mono text-[11px] text-zinc-400 md:inline">
               {status?.clean_area_m2 ?? 0}m² · {status?.clean_time_min ?? 0}m
             </span>
           </div>
         </div>
 
-        {/* Right: Quick View, Poop Guard, Sync, & Inspector Trigger */}
-        <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-zinc-900/45 p-1 backdrop-blur-2xl">
+        {/* Center/Right: Spotlight Search + Controls */}
+        <div className="glass-pill pointer-events-auto flex items-center gap-1 rounded-full p-1">
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-100 lg:flex"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span>Quick Command</span>
+            <span className="kbd-cap">⌘K</span>
+          </button>
+
           <button
             onClick={() => {
               setInspectorTab('poop');
@@ -432,22 +487,22 @@ export default function App() {
                 await api.syncMap();
                 await refreshAll();
                 setFitTrigger((n) => n + 1);
-                pushToast('SLAM map synced');
+                pushToast('SLAM synced');
               } finally {
                 setSyncing(false);
               }
             }}
-            title="Sync Real SLAM Map"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+            title="Sync Map"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
           </button>
 
           <button
             onClick={() => setShowTrajectory((v) => !v)}
-            title="Toggle Cleaning Path"
+            title="Toggle Path"
             className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
-              showTrajectory ? 'bg-white/[0.1] text-white' : 'text-zinc-500 hover:text-zinc-200'
+              showTrajectory ? 'bg-white/[0.1] text-sky-300' : 'text-zinc-500 hover:text-zinc-200'
             }`}
           >
             <Route className="h-3.5 w-3.5" />
@@ -455,7 +510,7 @@ export default function App() {
 
           <button
             onClick={() => setShowGrid((v) => !v)}
-            title="Toggle Metric Grid"
+            title="Toggle Grid"
             className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
               showGrid ? 'bg-white/[0.1] text-white' : 'text-zinc-500 hover:text-zinc-200'
             }`}
@@ -468,38 +523,38 @@ export default function App() {
               setInspectorOpen((v) => !v);
               refreshDps();
             }}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
               inspectorOpen
                 ? 'bg-white text-zinc-950'
                 : 'text-zinc-200 hover:bg-white/[0.08]'
             }`}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
-            Controls
+            Studio
           </button>
         </div>
       </header>
 
-      {/* FLOATING MINI ZOOM CONTROLS (LEFT MIDDLE) */}
-      <div className="fixed left-5 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1 rounded-full border border-white/[0.08] bg-zinc-900/45 p-1 backdrop-blur-2xl">
+      {/* FLOATING LEFT ZOOM PILL */}
+      <div className="glass-pill fixed left-5 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1 rounded-full p-1">
         <button
           onClick={() => setZoomDelta((z) => ({ dir: 1, seq: z.seq + 1 }))}
           title="Zoom In"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-white"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
         >
           <ZoomIn className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={() => setZoomDelta((z) => ({ dir: -1, seq: z.seq + 1 }))}
           title="Zoom Out"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-white"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
         >
           <ZoomOut className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={() => setFitTrigger((n) => n + 1)}
-          title="Reset View (R)"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.08] hover:text-white"
+          title="Fit to Screen (R)"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
         >
           <Maximize2 className="h-3.5 w-3.5" />
         </button>
@@ -514,49 +569,47 @@ export default function App() {
         draftZones.length > 0 ||
         draftPin) && (
         <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 flex justify-center px-4">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-white/[0.08] bg-zinc-900/55 px-4 py-1.5 text-xs backdrop-blur-2xl">
+          <div className="glass-pill pointer-events-auto flex items-center gap-3 rounded-full px-4 py-1.5 text-xs">
             {toolMode === 'place' && (
-              <span className="text-zinc-200">
-                Drag a box over any area (e.g. your <span className="font-semibold text-white">Corridor</span>) to save it as a permanent clickable Place
+              <span className="text-zinc-300">
+                Drag over any area (e.g. <span className="font-semibold text-white">Corridor</span>) to save as a clickable Place
               </span>
             )}
             {toolMode === 'brush' && (
               <div className="flex items-center gap-2">
-                <span className="text-zinc-400">Brush Size</span>
+                <span className="text-zinc-400">Brush</span>
                 <input
                   type="range"
                   min={6}
                   max={24}
                   value={brushRadiusPx}
                   onChange={(e) => setBrushRadiusPx(Number(e.target.value))}
-                  className="w-24 accent-white"
+                  className="w-24 accent-sky-400"
                 />
                 <span className="font-mono text-[11px] text-zinc-200">
                   {((brushRadiusPx * 10) / 100).toFixed(1)}m
                 </span>
               </div>
             )}
-
             {toolMode === 'pin' && (
               <label className="flex cursor-pointer items-center gap-1.5 text-zinc-200">
                 <input
                   type="checkbox"
                   checked={spotClean}
                   onChange={(e) => setSpotClean(e.target.checked)}
-                  className="accent-amber-400"
+                  className="accent-sky-400"
                 />
                 Spot Clean Spiral
               </label>
             )}
-
             {(selectedRoomIds.length > 0 || selectedPlaceIds.length > 0) && (
               <div className="flex items-center gap-1.5">
-                <span className="text-zinc-400">Passes:</span>
+                <span className="text-zinc-400">Passes</span>
                 {[1, 2].map((p) => (
                   <button
                     key={p}
                     onClick={() => setRoomPasses(p)}
-                    className={`rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold ${
+                    className={`rounded-full px-2.5 py-0.5 font-mono text-[11px] font-semibold transition ${
                       roomPasses === p ? 'bg-white text-zinc-950' : 'text-zinc-400 hover:text-white'
                     }`}
                   >
@@ -565,7 +618,6 @@ export default function App() {
                 ))}
               </div>
             )}
-
             {(selectedRoomIds.length > 0 || selectedPlaceIds.length > 0 || draftZones.length > 0 || draftPin) && (
               <button
                 onClick={() => {
@@ -583,10 +635,9 @@ export default function App() {
         </div>
       )}
 
-      {/* FLOATING TRANSLUCENT BOTTOM COMMAND DOCK */}
+      {/* FLOATING HARDWARE BOTTOM DOCK */}
       <footer className="pointer-events-none fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
-        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-full border border-white/[0.09] bg-zinc-900/50 p-1.5 shadow-2xl backdrop-blur-2xl">
-          {/* Spatial Picking Tools */}
+        <div className="glass-pill pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-full p-1.5">
           <div className="flex items-center gap-0.5">
             {dockTools.map((t) => {
               const active = toolMode === t.id;
@@ -599,7 +650,7 @@ export default function App() {
                     active
                       ? t.warn
                         ? 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-400/40'
-                        : 'bg-white text-zinc-950'
+                        : 'bg-white text-zinc-950 shadow-sm'
                       : 'text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100'
                   }`}
                 >
@@ -612,16 +663,14 @@ export default function App() {
 
           <div className="h-5 w-px bg-white/[0.1]" />
 
-          {/* Dynamic Primary Action CTA */}
           <button
             onClick={primary.onClick}
-            className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-zinc-200 active:scale-[0.98]"
+            className="flex items-center gap-2 rounded-full bg-sky-400 px-4 py-2 text-xs font-semibold text-zinc-950 shadow-[0_0_20px_rgba(56,189,248,0.35)] transition hover:bg-sky-300 active:scale-[0.98]"
           >
             <Play className="h-3.5 w-3.5 fill-current" />
             {primary.label}
           </button>
 
-          {/* Direct Hardware Actions: Pause / Dock / Locate */}
           <div className="flex items-center gap-0.5">
             <button
               onClick={async () => {
@@ -659,7 +708,7 @@ export default function App() {
         </div>
       </footer>
 
-      {/* COLLAPSIBLE TRANSLUCENT INSPECTOR */}
+      {/* COLLAPSIBLE STUDIO INSPECTOR */}
       <InspectorPanel
         open={inspectorOpen}
         tab={inspectorTab}
@@ -721,13 +770,13 @@ export default function App() {
         onTogglePreFlight={setPreFlightGate}
         onDeleteHazard={async (id) => {
           const res = await api.deletePoopHazard(id);
-          recordPacket('Clear Hazard (0x1A)', res.packet);
-          pushToast('Hazard cleared & robot updated');
+          if (res.packet) recordPacket('Clear Hazard (0x1A)', res.packet);
+          pushToast('Hazard cleared & synced');
           refreshAll();
         }}
         onSelectPoopTool={() => {
           setToolMode('poop');
-          pushToast('Click anywhere on the map to drop a 💩 Poop No-Go bubble');
+          pushToast('Click the map to drop a 💩 Poop No-Go bubble');
         }}
         onEmergencyHalt={handleEmergencyHalt}
         rawDps={rawDps}
@@ -740,10 +789,53 @@ export default function App() {
         }}
       />
 
+      {/* SPOTLIGHT COMMAND PALETTE (Cmd/Ctrl+K) */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        rooms={rooms}
+        places={customPlaces}
+        presets={presets}
+        onCommand={(cmd) => {
+          if (cmd === 'start' || cmd === 'wallfollow') {
+            runWithPoopCheck(cmd === 'start' ? 'Full-house clean' : 'Wall-follow clean', async () => {
+              await api.sendCommand(cmd);
+              pushToast(cmd === 'start' ? 'Started full clean' : 'Started wall-follow');
+              refreshAll();
+            });
+          } else {
+            api.sendCommand(cmd).then(() => {
+              pushToast(`Sent: ${cmd}`);
+              refreshAll();
+            });
+          }
+        }}
+        onCleanPlace={(pl) =>
+          runWithPoopCheck(`Clean ${pl.name}`, () =>
+            executeCleanZones([
+              { id: pl.id, x1: pl.x1, y1: pl.y1, x2: pl.x2, y2: pl.y2, passes: roomPasses },
+            ])
+          )
+        }
+        onCleanRoom={(r) =>
+          runWithPoopCheck(`Clean ${r.name}`, () => executeCleanRooms([r.id], roomPasses))
+        }
+        onRunPreset={(p) =>
+          runWithPoopCheck(`Run preset "${p.name}"`, async () => {
+            if (p.kind === 'rooms' && p.roomIds) await executeCleanRooms(p.roomIds, p.passes);
+            else if (p.kind === 'zones' && p.zones) await executeCleanZones(p.zones);
+          })
+        }
+        onSelectPoop={() => {
+          setToolMode('poop');
+          pushToast('Click map to drop 💩 Poop No-Go bubble');
+        }}
+      />
+
       {/* PRE-FLIGHT POOP CHECK SAFETY GATE */}
       {pendingAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-md">
-          <div className="w-full max-w-sm rounded-2xl border border-white/[0.1] bg-zinc-900/80 p-5 shadow-2xl backdrop-blur-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md">
+          <div className="glass-panel w-full max-w-sm rounded-2xl p-5">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-300">
               <span className="text-lg">💩</span> Pre-Flight Floor Check
             </div>
@@ -762,7 +854,7 @@ export default function App() {
                 }}
                 className="rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2 text-xs font-medium text-amber-200 hover:bg-amber-500/25"
               >
-                Drop Poop Pin First
+                Drop Poop Pin
               </button>
               <button
                 onClick={() => setPendingAction(null)}
@@ -776,7 +868,7 @@ export default function App() {
                   setPendingAction(null);
                   await run();
                 }}
-                className="rounded-xl bg-white px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-zinc-200"
+                className="rounded-xl bg-sky-400 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-sky-300"
               >
                 Floor Clear · Go
               </button>
@@ -787,14 +879,14 @@ export default function App() {
 
       {/* MINIMAL TOAST */}
       {toast && (
-        <div className="pointer-events-none fixed top-18 left-1/2 z-50 -translate-x-1/2 rounded-full border border-white/[0.1] bg-zinc-900/75 px-4 py-1.5 text-xs text-zinc-100 shadow-2xl backdrop-blur-2xl">
+        <div className="glass-pill pointer-events-none fixed top-18 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-1.5 text-xs text-zinc-100">
           {toast}
         </div>
       )}
 
       {/* CREATE / EDIT PERMANENT CUSTOM PLACE MODAL */}
       {(newPlaceRect || editingPlace) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md">
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -808,7 +900,7 @@ export default function App() {
                 setNewPlaceRect(null);
                 setToolMode('rooms');
                 setSelectedPlaceIds([res.place.id]);
-                pushToast(`Created "${finalName}" — click it anytime to clean just this place`);
+                pushToast(`Saved "${finalName}" on floorplan`);
               } else if (editingPlace) {
                 await api.updateCustomPlace(editingPlace.id, {
                   name: finalName,
@@ -819,7 +911,7 @@ export default function App() {
               }
               refreshAll();
             }}
-            className="w-full max-w-sm rounded-2xl border border-white/[0.1] bg-zinc-900/80 p-5 shadow-2xl backdrop-blur-2xl"
+            className="glass-panel w-full max-w-sm rounded-2xl p-5"
           >
             <h3 className="text-sm font-semibold text-white">
               {newPlaceRect ? 'Save New Clickable Place' : `Edit "${editingPlace?.name}"`}
@@ -834,7 +926,7 @@ export default function App() {
               onChange={(e) => setPlaceNameInput(e.target.value)}
               placeholder="e.g. Corridor, Entryway, Under Table"
               autoFocus
-              className="mt-3 w-full rounded-xl border border-white/[0.1] bg-white/[0.05] px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-white/30 focus:outline-none"
+              className="mt-3 w-full rounded-xl border border-white/[0.1] bg-white/[0.05] px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-sky-400/50 focus:outline-none"
             />
 
             <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -895,7 +987,7 @@ export default function App() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-white px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-zinc-200"
+                  className="rounded-xl bg-sky-400 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-sky-300"
                 >
                   {newPlaceRect ? 'Save Place' : 'Update'}
                 </button>

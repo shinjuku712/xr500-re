@@ -116,6 +116,31 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const [dpId, setDpId] = useState('16');
   const [dpVal, setDpVal] = useState('get_both');
   const [localVol, setLocalVol] = useState<number | null>(null);
+  const [kbDrive, setKbDrive] = useState(false);
+
+  React.useEffect(() => {
+    if (!kbDrive || !open || tab !== 'clean') return;
+    const onDown = (e: KeyboardEvent) => {
+      if (e.repeat || e.target instanceof HTMLInputElement) return;
+      const k = e.key.toLowerCase();
+      if (k === 'w' || e.key === 'ArrowUp') { e.preventDefault(); onDirection('foward'); }
+      else if (k === 's' || e.key === 'ArrowDown') { e.preventDefault(); onDirection('backward'); }
+      else if (k === 'a' || e.key === 'ArrowLeft') { e.preventDefault(); onDirection('turn_left'); }
+      else if (k === 'd' || e.key === 'ArrowRight') { e.preventDefault(); onDirection('turn_right'); }
+    };
+    const onUp = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
+        onDirection('stop');
+      }
+    };
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    return () => {
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+    };
+  }, [kbDrive, open, tab, onDirection]);
 
   if (!open) return null;
 
@@ -152,7 +177,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const sortedDpKeys = Object.keys(dps).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
 
   return (
-    <aside className="fixed right-4 top-20 bottom-24 z-30 flex w-[336px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-zinc-950/50 shadow-2xl backdrop-blur-2xl">
+    <aside className="glass-panel fixed right-4 top-20 bottom-24 z-30 flex w-[340px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl">
       {/* Frosted Tab Strip */}
       <div className="flex items-center justify-between border-b border-white/[0.07] px-2.5 py-2">
         <div className="flex gap-1">
@@ -356,10 +381,22 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               </div>
             </div>
 
-            {/* Live Manual RC D-Pad (DP 12) */}
+            {/* Live Manual RC D-Pad (DP 12) + WASD Keyboard Mode */}
             <div className="border-t border-white/[0.07] pt-4">
-              <div className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-                Manual RC Drive (DP 12)
+              <div className="mb-2.5 flex items-center justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">
+                  Manual RC Drive (DP 12)
+                </span>
+                <button
+                  onClick={() => setKbDrive((v) => !v)}
+                  className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold transition ${
+                    kbDrive
+                      ? 'bg-sky-400/20 text-sky-300 ring-1 ring-sky-400/40'
+                      : 'bg-white/[0.05] text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {kbDrive ? 'WASD ARMED' : 'WASD Off'}
+                </button>
               </div>
               <div className="mx-auto grid w-36 grid-cols-3 gap-1.5">
                 <div />
